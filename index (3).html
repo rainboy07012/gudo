@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>구도 가이드 프로토타입</title>
+<style>
+:root{--bg:#0d0d0f;--panel:#17171b;--line:#2a2a30;--ink:#f3f3f5;--dim:#9a9aa3;--or:#ff8a3d;--bl:#3aa8ff;--gr:#3ddc6f;--ye:#e8b53a}
+*{box-sizing:border-box;margin:0;min-width:0}
+html,body{background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo","Noto Sans KR",sans-serif;-webkit-tap-highlight-color:transparent}
+body{min-height:100dvh;display:flex;justify-content:center;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.wrap{width:100%;max-width:520px;padding:12px 14px 24px;display:flex;flex-direction:column;gap:12px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+h1{font-size:18px;font-weight:700;letter-spacing:-.02em}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg button{border:0;background:none;color:var(--dim);font:inherit;font-size:14px;padding:8px 12px;border-radius:9px;min-height:38px}
+.seg button.on{background:#3a2a20;color:var(--or);font-weight:600}
+#stage{position:relative;width:100%;aspect-ratio:3/4;border-radius:18px;overflow:hidden;background:#000;touch-action:none;user-select:none;-webkit-user-select:none}
+#stage canvas{position:absolute;inset:0;width:100%;height:100%}
+#vid{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.chip{position:absolute;padding:6px 12px;border-radius:999px;background:rgba(10,10,12,.72);font-size:14px}
+#zbadge{top:12px;right:12px}
+#srcTag{top:12px;left:12px;border-radius:6px;font-size:13px}
+#hint{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:min(88%,400px);text-align:center;border-radius:16px;padding:12px 16px;background:rgba(10,10,12,.82)}
+#hint b{display:block;font-size:16px;font-weight:700}
+#hint span{font-size:13px;color:var(--dim)}
+#hint.ok b{color:var(--gr)}
+#cap{position:absolute;left:50%;transform:translateX(-50%);bottom:104px;border:1.5px solid var(--ye);color:var(--ye);background:rgba(10,10,12,.85);border-radius:999px;padding:10px 22px;font:inherit;font-weight:700;font-size:16px;min-height:44px;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(232,181,58,.18)}}
+@media(prefers-reduced-motion:reduce){#cap{animation:none}}
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;color:var(--dim);font-size:14px}
+#empty b{color:var(--ink);font-size:18px}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-size:15px;border-radius:12px;padding:10px 16px;min-height:44px}
+.btn.pri{background:var(--or);border-color:var(--or);color:#1a0f07;font-weight:700}
+.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.steps div{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--dim);white-space:nowrap}
+.steps i{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-style:normal;font-size:12px}
+.steps .done{color:var(--gr)}.steps .done i{border-color:var(--gr)}
+.steps .now{color:var(--or)}.steps .now i{border-color:var(--or)}
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bar .sp{flex:1}
+#shutter{width:64px;height:64px;border-radius:50%;border:4px solid var(--ink);background:#fff;background-clip:content-box;padding:3px}
+#shutter:disabled{opacity:.3}
+#status{font-size:13px;color:var(--dim);min-height:20px}
+#shot{position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;z-index:9}
+#shot[hidden]{display:none}
+#shot img{max-width:100%;max-height:72dvh;border-radius:14px}
+#shot p{font-size:13px;color:var(--dim)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>구도 가이드</h1>
+    <div class="seg" id="mode">
+      <button data-m="single" class="on">한 사람</button>
+      <button data-m="group">여럿</button>
+    </div>
+  </header>
+
+  <div id="stage">
+    <video id="vid" playsinline muted></video>
+    <canvas id="view"></canvas>
+    <canvas id="ov"></canvas>
+    <div id="empty">
+      <b>카메라를 움직여 점을 원에 맞추는 가이드</b>
+      실시간 카메라 또는 갖고 있는 사진으로 체험할 수 있어요.
+      <button class="btn pri" id="eCam">카메라 켜기</button>
+      <button class="btn" id="ePhoto">사진으로 체험</button>
+    </div>
+    <div class="chip" id="srcTag" hidden></div>
+    <div class="chip" id="zbadge" hidden>1.0x</div>
+    <button id="cap" hidden></button>
+    <div id="hint" hidden><b></b><span></span></div>
+  </div>
+
+  <div class="steps" id="steps">
+    <div data-s="zoom"><i>1</i>줌</div>
+    <div data-s="comp"><i>2</i>구도</div>
+    <div data-s="ev"><i>3</i>노출</div>
+    <div data-s="shot"><i>4</i>촬영</div>
+  </div>
+
+  <div class="bar">
+    <button class="btn" id="bCam">카메라</button>
+    <button class="btn" id="bPhoto">사진</button>
+    <button class="btn" id="bAuto" hidden>자동으로 맞추기</button>
+    <button class="btn" id="bRe">다시 분석</button>
+    <span class="sp"></span>
+    <button id="shutter" aria-label="촬영" disabled></button>
+  </div>
+  <div id="status">인식 모델 불러오는 중…</div>
+  <input type="file" id="file" accept="image/*" hidden>
+</div>
+
+<div id="shot" hidden>
+  <img id="shotImg" alt="촬영한 사진">
+  <p>길게 눌러 저장하거나 아래 버튼을 누르세요</p>
+  <div class="bar"><a class="btn pri" id="shotDl" download="gudo.jpg">저장</a><button class="btn" id="shotClose">닫기</button></div>
+</div>
+
+<script type="module">
+{
+const $=s=>document.querySelector(s);
+const stage=$('#stage'),cv=$('#view'),ov=$('#ov'),vid=$('#vid');
+const ctx=cv.getContext('2d'),oc=ov.getContext('2d');
+const C={or:'#ff8a3d',bl:'#3aa8ff',gr:'#3ddc6f',ye:'#e8b53a'};
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const S={src:null,mode:'single',img:null,zoom:1,hwZoom:false,pan:{x:0,y:0},center:false,dets:[],sm:null,target:null,ok:false,
+  recZoom:null,zoomDone:false,ev:null,evDone:false,evApplied:0,evFactor:1,shot:false,
+  det:null,loading:true,pending:false,lastDet:0,lastTs:0,lastEv:0,track:null,anim:null};
+let W=0,H=0,dpr=1;
+
+function resize(){
+  const r=stage.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;
+  for(const c of [cv,ov]){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr)}
+  ctx.setTransform(dpr,0,0,dpr,0,0);oc.setTransform(dpr,0,0,dpr,0,0);
+}
+const ro=new ResizeObserver(resize);ro.observe(stage);
+
+function srcSize(){
+  if(S.src==='cam')return vid.videoWidth?[vid.videoWidth,vid.videoHeight]:null;
+  if(S.src==='photo'&&S.img)return [S.img.naturalWidth,S.img.naturalHeight];
+  return null;
+}
+function view(){
+  const sz=srcSize();if(!sz||!W)return null;const [w,h]=sz;
+  const base=Math.max(W/w,H/h);
+  if(S.src==='cam'){const s=base*(S.hwZoom?1:S.zoom);return {s,ox:(W-w*s)/2,oy:(H-h*s)/2,w,h}}
+  const s=base*1.3*S.zoom,iw=w*s,ih=h*s;
+  if(S.center){S.pan={x:(W-iw)/2,y:(H-ih)/2};S.center=false}
+  S.pan.x=clamp(S.pan.x,W-iw,0);S.pan.y=clamp(S.pan.y,H-ih,0);
+  return {s,ox:S.pan.x,oy:S.pan.y,w,h};
+}
+const toStage=(nx,ny,v)=>[v.ox+nx*v.w*v.s,v.oy+ny*v.h*v.s];
+
+function union(ps){
+  const x0=Math.min(...ps.map(d=>d.x)),y0=Math.min(...ps.map(d=>d.y));
+  const x1=Math.max(...ps.map(d=>d.x+d.w)),y1=Math.max(...ps.map(d=>d.y+d.h));
+  return {x:x0,y:y0,w:x1-x0,h:y1-y0,cat:'person'};
+}
+function subject(v){
+  const ps=S.dets.filter(d=>d.cat==='person');
+  const list=ps.length?ps:S.dets;if(!list.length)return null;
+  const group=S.mode==='group'&&ps.length>0;
+  const box=group?union(ps):list.reduce((a,b)=>a.w*a.h>b.w*b.h?a:b);
+  const [x0,y0]=toStage(box.x,box.y,v),[x1,y1]=toStage(box.x+box.w,box.y+box.h,v);
+  const person=box.cat==='person';
+  const ax=(x0+x1)/2,ay=person?y0+(y1-y0)*(group?0.22:0.32):(y0+y1)/2;
+  return {x0,y0,x1,y1,ax,ay,person,group,people:ps.map(d=>{const [a,b]=toStage(d.x,d.y,v),[c,e]=toStage(d.x+d.w,d.y+d.h,v);return [a,b,c,e]})};
+}
+
+function pickTarget(sub){
+  if(sub.group)S.target={x:.5,y:1/3};
+  else S.target={x:sub.ax/W<.5?1/3:2/3,y:sub.ay/H<.5?1/3:2/3};
+  if(!S.zoomDone){
+    const ratio=(sub.y1-sub.y0)/H,want=sub.group?.6:.5;
+    const rec=clamp(Math.round(S.zoom*want/Math.max(ratio,.05)*2)/2,1,3);
+    if(rec>=S.zoom+.5)S.recZoom=rec;else S.zoomDone=true;
+  }
+}
+
+function reset(){
+  S.target=null;S.ok=false;S.sm=null;S.recZoom=null;S.zoomDone=false;
+  S.ev=null;S.evDone=false;S.evApplied=0;S.evFactor=1;S.shot=false;cv.style.filter='';
+  if(S.track){const c=S.track.getCapabilities?.()||{};if(c.exposureCompensation)S.track.applyConstraints({advanced:[{exposureCompensation:0}]}).catch(()=>{})}
+}
+
+async function applyZoom(){
+  const z=S.recZoom;if(!z)return;
+  if(S.src==='cam'&&S.track){
+    const c=S.track.getCapabilities?.()||{};
+    if(c.zoom){try{await S.track.applyConstraints({advanced:[{zoom:clamp(z,c.zoom.min,c.zoom.max)}]});S.hwZoom=true}catch(e){S.hwZoom=false}}
+  }
+  if(S.src==='photo'){
+    const v=view();const cx=(W/2-v.ox)/(v.w*v.s),cy=(H/2-v.oy)/(v.h*v.s);
+    const s=Math.max(W/v.w,H/v.h)*1.3*z;S.pan={x:W/2-cx*v.w*s,y:H/2-cy*v.h*s};
+  }
+  S.zoom=z;S.zoomDone=true;S.recZoom=null;S.target=null;S.ok=false;S.sm=null;
+}
+
+async function applyEv(){
+  const ev=S.ev;let hw=false;
+  if(S.src==='cam'&&S.track){
+    const c=S.track.getCapabilities?.()||{};
+    if(c.exposureCompensation){try{await S.track.applyConstraints({advanced:[{exposureCompensation:clamp(ev,c.exposureCompensation.min,c.exposureCompensation.max)}]});hw=true}catch(e){}}
+  }
+  if(!hw){S.evFactor=2**(ev/2.2);cv.style.filter=`brightness(${S.evFactor.toFixed(3)})`}
+  S.evDone=true;S.evApplied=ev;
+}
+
+const probe=document.createElement('canvas');probe.width=48;probe.height=64;
+const pc=probe.getContext('2d',{willReadFrequently:true});
+function measureEv(sub){
+  pc.drawImage(cv,0,0,48,64);
+  const d=pc.getImageData(0,0,48,64).data;
+  const bx0=Math.floor(clamp(sub.x0/W,0,1)*48),bx1=Math.ceil(clamp(sub.x1/W,0,1)*48);
+  const by0=Math.floor(clamp(sub.y0/H,0,1)*64),by1=Math.ceil(clamp(sub.y1/H,0,1)*64);
+  let all=0,n=0,sb=0,m=0;
+  for(let y=0;y<64;y++)for(let x=0;x<48;x++){
+    const i=(y*48+x)*4,l=((.2126*d[i]+.7152*d[i+1]+.0722*d[i+2])/255)**2.2;
+    all+=l;n++;if(x>=bx0&&x<bx1&&y>=by0&&y<by1){sb+=l;m++}
+  }
+  const mean=.7*(m?sb/m:all/n)+.3*(all/n);
+  const ev=Math.round(clamp(Math.log2(.18/Math.max(mean,.002)),-2,2)*10)/10;
+  if(Math.abs(ev)<.3){S.evDone=true;S.evApplied=0}else S.ev=ev;
+}
+
+function norm(dets,w,h){
+  return dets.map(d=>({x:d.boundingBox.originX/w,y:d.boundingBox.originY/h,w:d.boundingBox.width/w,h:d.boundingBox.height/h,
+    cat:d.categories?.[0]?.categoryName||'',score:d.categories?.[0]?.score||0}));
+}
+function nextTs(){S.lastTs=Math.max(performance.now(),S.lastTs+1);return S.lastTs}
+function detectPhoto(){
+  if(!S.det){S.pending=true;return}
+  S.pending=false;
+  try{const r=S.det.detectForVideo(S.img,nextTs());S.dets=norm(r.detections,S.img.naturalWidth,S.img.naturalHeight)}catch(e){S.dets=[]}
+  if(!S.dets.length)status('피사체를 못 찾았어요. 사진 속 주인공을 탭해 지정해주세요.');
+}
+
+function dirText(sub){
+  const dx=(sub.ax-S.target.x*W)/W,dy=(sub.ay-S.target.y*H)/H,cam=S.src==='cam';
+  const h=Math.abs(dx)>.025?(cam?(dx>0?'오른쪽으로 돌려보세요':'왼쪽으로 돌려보세요'):(dx>0?'왼쪽으로 끌어보세요':'오른쪽으로 끌어보세요')):'';
+  const vt=Math.abs(dy)>.025?(cam?(dy>0?'아래로 기울여보세요':'위로 들어보세요'):(dy>0?'위로 끌어보세요':'아래로 끌어보세요')):'';
+  const first=Math.abs(dx)>=Math.abs(dy)?h:vt,second=first===h?vt:h;
+  return (cam?'카메라를 ':'사진을 ')+(first||second)+(first&&second?' · 조금 '+second.replace(/보세요$/,'요'):'');
+}
+
+function line(x0,y0,x1,y1){oc.beginPath();oc.moveTo(x0,y0);oc.lineTo(x1,y1);oc.stroke()}
+function corners(x0,y0,x1,y1,col){
+  const L=Math.min(28,(x1-x0)/3,(y1-y0)/3);oc.strokeStyle=col;oc.lineWidth=3.5;oc.lineCap='round';
+  for(const [x,y,sx,sy] of [[x0,y0,1,1],[x1,y0,-1,1],[x0,y1,1,-1],[x1,y1,-1,-1]]){
+    oc.beginPath();oc.moveTo(x,y+sy*L);oc.lineTo(x,y);oc.lineTo(x+sx*L,y);oc.stroke();
+  }
+}
+function drawOv(sub,now){
+  oc.clearRect(0,0,W,H);
+  oc.setLineDash([]);oc.lineWidth=1;oc.strokeStyle='rgba(255,255,255,.35)';
+  for(const f of [1/3,2/3])line(f*W,0,f*W,H);
+  oc.lineWidth=2.5;oc.strokeStyle=C.or;
+  for(const f of [1/3,2/3])line(0,f*H,W,f*H);
+  if(!sub||!S.target)return;
+  const tx=S.target.x*W,ty=S.target.y*H,col=S.ok?C.gr:C.bl;
+  oc.setLineDash([7,6]);oc.lineWidth=2;oc.strokeStyle=C.or;
+  if(sub.group){line(tx,ty,W*.04,H);line(tx,ty,W*.96,H)}else line(tx,0,tx,H);
+  oc.setLineDash([]);
+  if(sub.group){oc.strokeStyle='rgba(232,181,58,.8)';oc.lineWidth=2;for(const [a,b,c,e] of sub.people){oc.beginPath();oc.roundRect?oc.roundRect(a,b,c-a,e-b,10):oc.rect(a,b,c-a,e-b);oc.stroke()}}
+  corners(sub.x0,sub.y0,sub.x1,sub.y1,col);
+  oc.strokeStyle=col;oc.lineWidth=3;oc.beginPath();oc.arc(tx,ty,17,0,7);oc.stroke();
+  if(S.ok){const p=(now%1400)/1400;oc.globalAlpha=1-p;oc.lineWidth=2;oc.beginPath();oc.arc(tx,ty,17+p*18,0,7);oc.stroke();oc.globalAlpha=1}
+  oc.fillStyle=col;oc.beginPath();oc.arc(sub.ax,sub.ay,9,0,7);oc.fill();
+}
+
+let lastUI='';
+const hint=$('#hint'),cap=$('#cap');let capAct=null;
+function ui(sub){
+  let t,s,ok=false,c=null;
+  if(!S.src)return;
+  if(!sub){t=S.loading?'인식 모델 불러오는 중…':'피사체를 찾는 중…';s=S.src==='photo'?'사진 속 주인공을 탭해서 직접 지정할 수 있어요':'사람이나 물체를 화면에 담아주세요'}
+  else if(S.recZoom){t=`${S.recZoom}x 줌을 추천해요`;s='노란 캡슐을 누르면 적용돼요';c=['zoom',`${S.recZoom}x 적용`]}
+  else if(!S.ok){t='점을 원에 맞춰보세요';s=dirText(sub)}
+  else if(!S.evDone){ok=true;t='좋아요! 구도가 맞았어요';
+    if(S.ev==null)s='밝기를 확인하는 중…';else{s='노출 캡슐을 누르면 밝기도 맞춰져요';c=['ev',`밝기 ${S.ev>0?'↑ +':'↓ '}${S.ev}`]}}
+  else{ok=true;t=S.shot?'찍었어요! 다시 맞춰볼 수 있어요':'지금 찍으세요';s='초록이면 준비 완료예요'}
+  const zb=`${S.zoom.toFixed(1)}x${S.evApplied?` · ${S.evApplied>0?'+':''}${S.evApplied}`:''}`;
+  const key=[t,s,ok,c&&c[1],zb,S.zoomDone,S.ok,S.evDone,S.shot].join('|');
+  if(key===lastUI)return;lastUI=key;
+  hint.hidden=false;hint.classList.toggle('ok',ok);hint.querySelector('b').textContent=t;hint.querySelector('span').textContent=s;
+  cap.hidden=!c;if(c){cap.textContent=c[1];capAct=c[0]}
+  $('#zbadge').hidden=false;$('#zbadge').textContent=zb;
+  $('#shutter').disabled=!sub;
+  const st={zoom:S.zoomDone,comp:S.ok,ev:S.evDone,shot:S.shot};
+  let nowSet=false;
+  for(const el of document.querySelectorAll('#steps div')){
+    const done=!!st[el.dataset.s];el.classList.toggle('done',done);
+    const isNow=!done&&!nowSet&&!!sub;el.classList.toggle('now',isNow);if(isNow)nowSet=true;
+  }
+}
+cap.addEventListener('click',e=>{e.stopPropagation();if(capAct==='zoom')applyZoom();else if(capAct==='ev')applyEv()});
+
+function frame(now){
+  requestAnimationFrame(frame);
+  if(!S.src)return;
+  const v=view();if(!v)return;
+  if(S.anim){const a=S.anim,p=clamp((now-a.t0)/450,0,1),e=1-(1-p)**3;
+    S.pan={x:a.from.x+(a.to.x-a.from.x)*e,y:a.from.y+(a.to.y-a.from.y)*e};if(p>=1)S.anim=null}
+  ctx.clearRect(0,0,W,H);
+  if(S.src==='cam'&&vid.readyState<2)return;
+  ctx.drawImage(S.src==='cam'?vid:S.img,v.ox,v.oy,v.w*v.s,v.h*v.s);
+  if(S.src==='cam'&&S.det&&now-S.lastDet>90){
+    S.lastDet=now;try{const r=S.det.detectForVideo(vid,nextTs());S.dets=norm(r.detections,vid.videoWidth,vid.videoHeight)}catch(e){}
+  }
+  let sub=subject(v);
+  if(sub&&S.src==='cam'){
+    if(S.sm){S.sm.ax+=(sub.ax-S.sm.ax)*.35;S.sm.ay+=(sub.ay-S.sm.ay)*.35}else S.sm={ax:sub.ax,ay:sub.ay};
+    sub.ax=S.sm.ax;sub.ay=S.sm.ay;
+  }
+  if(sub&&!S.target)pickTarget(sub);
+  if(sub&&S.target){
+    const d=Math.hypot((sub.ax-S.target.x*W)/W,(sub.ay-S.target.y*H)/H);
+    S.ok=S.ok?d<.055:d<.035;
+    if(S.ok&&!S.recZoom&&!S.evDone&&S.ev==null&&now-S.lastEv>400){S.lastEv=now;measureEv(sub)}
+  }else S.ok=false;
+  drawOv(sub,now);ui(sub);
+}
+requestAnimationFrame(frame);
+
+function status(m){$('#status').textContent=m}
+function setSrc(){
+  $('#empty').hidden=true;$('#srcTag').hidden=false;
+  $('#srcTag').textContent=S.src==='cam'?'실시간 카메라':'사진 체험 · 드래그로 이동';
+  $('#bAuto').hidden=S.src!=='photo';lastUI='';
+}
+function stopCam(){
+  const st=vid.srcObject;if(st)st.getTracks().forEach(t=>t.stop());vid.srcObject=null;S.track=null;S.hwZoom=false;
+}
+async function startCam(){
+  if(!navigator.mediaDevices?.getUserMedia){status('이 브라우저에서는 카메라를 쓸 수 없어요. HTTPS 주소로 열어주세요.');return}
+  try{
+    const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:960}},audio:false});
+    stopCam();vid.srcObject=st;await vid.play();
+    S.track=st.getVideoTracks()[0];S.src='cam';S.img=null;S.dets=[];S.zoom=1;reset();setSrc();
+  }catch(e){status('카메라를 열 수 없어요. 권한을 허용했는지, HTTPS 주소인지 확인해주세요.')}
+}
+function pickPhoto(){$('#file').click()}
+$('#file').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const img=new Image();
+  img.onload=()=>{stopCam();S.img=img;S.src='photo';S.zoom=1;S.center=true;S.dets=[];reset();setSrc();detectPhoto()};
+  img.src=URL.createObjectURL(f);e.target.value='';
+});
+$('#eCam').addEventListener('click',startCam);$('#bCam').addEventListener('click',startCam);
+$('#ePhoto').addEventListener('click',pickPhoto);$('#bPhoto').addEventListener('click',pickPhoto);
+$('#bRe').addEventListener('click',()=>{if(S.src==='photo')S.zoom=1,S.center=true;reset();lastUI=''});
+$('#bAuto').addEventListener('click',()=>{
+  const v=view();if(!v)return;const sub=subject(v);if(!sub||!S.target)return;
+  S.anim={t0:performance.now(),from:{...S.pan},to:{x:S.pan.x+(S.target.x*W-sub.ax),y:S.pan.y+(S.target.y*H-sub.ay)}};
+});
+for(const b of document.querySelectorAll('#mode button'))b.addEventListener('click',()=>{
+  document.querySelectorAll('#mode button').forEach(x=>x.classList.toggle('on',x===b));S.mode=b.dataset.m;reset();lastUI='';
+});
+
+let drag=null;
+stage.addEventListener('pointerdown',e=>{
+  if(e.target.closest('button')||S.src!=='photo')return;
+  drag={x:e.clientX,y:e.clientY,px:S.pan.x,py:S.pan.y,moved:false};stage.setPointerCapture(e.pointerId);S.anim=null;
+});
+stage.addEventListener('pointermove',e=>{
+  if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+  if(Math.hypot(dx,dy)>6)drag.moved=true;
+  if(drag.moved)S.pan={x:drag.px+dx,y:drag.py+dy};
+});
+stage.addEventListener('pointerup',e=>{
+  if(drag&&!drag.moved){
+    const r=stage.getBoundingClientRect(),v=view();
+    if(v){const nx=(e.clientX-r.left-v.ox)/(v.w*v.s),ny=(e.clientY-r.top-v.oy)/(v.h*v.s);
+      const bw=.26*W/(v.w*v.s),bh=.46*H/(v.h*v.s);
+      S.dets=[{x:nx-bw/2,y:ny-bh*.32,w:bw,h:bh,cat:'person',score:1}];reset();status('탭한 위치를 피사체로 지정했어요.')}
+  }
+  drag=null;
+});
+stage.addEventListener('pointercancel',()=>{drag=null});
+
+$('#shutter').addEventListener('click',()=>{
+  const c=document.createElement('canvas');c.width=cv.width;c.height=cv.height;const x=c.getContext('2d');x.drawImage(cv,0,0);
+  if(S.evFactor!==1){const d=x.getImageData(0,0,c.width,c.height),a=d.data,f=S.evFactor;
+    for(let i=0;i<a.length;i+=4){a[i]=Math.min(255,a[i]*f);a[i+1]=Math.min(255,a[i+1]*f);a[i+2]=Math.min(255,a[i+2]*f)}x.putImageData(d,0,0)}
+  const url=c.toDataURL('image/jpeg',.92);$('#shotImg').src=url;$('#shotDl').href=url;$('#shot').hidden=false;S.shot=true;
+});
+$('#shotClose').addEventListener('click',()=>{$('#shot').hidden=true});
+
+const V='0.10.14',CDN=`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${V}`;
+(async()=>{
+  try{
+    const m=await import(`${CDN}/vision_bundle.mjs`);
+    const fs=await m.FilesetResolver.forVisionTasks(`${CDN}/wasm`);
+    const mk=d=>m.ObjectDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite',delegate:d},scoreThreshold:.35,maxResults:6,runningMode:'VIDEO'});
+    try{S.det=await mk('GPU')}catch(e){S.det=await mk('CPU')}
+    status('');if(S.pending&&S.img)detectPhoto();
+  }catch(e){status('인식 모델을 못 불러왔어요. 사진 모드에서 피사체를 탭해 지정할 수 있어요.')}
+  S.loading=false;lastUI='';
+})();
+}
+</script>
+</body>
+</html>
