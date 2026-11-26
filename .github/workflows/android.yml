@@ -1,4 +1,4 @@
-name: 안드로이드 APK 빌드
+name: 안드로이드 빌드
 
 on:
   push:
@@ -11,6 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,35 +31,76 @@ jobs:
       - name: 의존성 설치
         run: npm install
 
-      - name: 웹 파일 준비
+      - name: 웹 파일 준비 (인식 엔진 내장)
         run: npm run prepare-web
+
+      - name: 인식 모델 내장
+        run: |
+          curl -fsSL -o www/models/efficientdet_lite0.tflite \
+            https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite
+          ls -la www/models
 
       - name: 안드로이드 프로젝트 생성
         run: npx cap add android
 
-      - name: 카메라 권한 추가
+      - name: 권한·버전 설정
         run: |
-          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />#' android/app/src/main/AndroidManifest.xml
-          grep -n "CAMERA" android/app/src/main/AndroidManifest.xml
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />#' $M
+          sed -i 's#android:theme="@style/AppTheme.NoActionBarLaunch"#android:theme="@style/AppTheme.NoActionBarLaunch"\n            android:screenOrientation="portrait"#' $M
+          grep -n "CAMERA\|portrait" $M
+          G=android/app/build.gradle
+          VC=$(( 100 + GITHUB_RUN_NUMBER ))
+          sed -i "s/versionCode [0-9]*/versionCode $VC/; s/versionName \"[^\"]*\"/versionName \"$(node -p 'require(\"./package.json\").version')\"/" $G
+          grep -n "versionCode\|versionName\|targetSdk" $G android/variables.gradle
 
       - name: 앱 아이콘 생성
-        run: npx capacitor-assets generate --android || echo "아이콘 생성 건너뜀"
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#000000' --iconBackgroundColorDark '#000000' --splashBackgroundColor '#000000' --splashBackgroundColorDark '#000000' || echo "아이콘 생성 건너뜀"
 
       - name: 동기화
         run: npx cap sync android
 
-      - name: APK 빌드
+      - name: 서명 키 준비
+        if: env.HAS_KEY == 'true'
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload.jks
+          cat >> android/app/build.gradle <<'EOF'
+
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file("upload.jks")
+                      storePassword System.getenv("KEY_PASSWORD")
+                      keyAlias System.getenv("KEY_ALIAS")
+                      keyPassword System.getenv("KEY_PASSWORD")
+                  }
+              }
+              buildTypes { release { signingConfig signingConfigs.release } }
+          }
+          EOF
+
+      - name: 테스트용 APK 빌드
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../framefit-test.apk
 
-      - name: 파일 이름 정리
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk gudo.apk
+      - name: 플레이스토어용 AAB 빌드
+        if: env.HAS_KEY == 'true'
+        working-directory: android
+        env:
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew bundleRelease --no-daemon
+          cp app/build/outputs/bundle/release/app-release.aab ../framefit-release.aab
 
       - name: 다운로드 페이지에 올리기
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          FILES="framefit-test.apk"
+          [ -f framefit-release.aab ] && FILES="$FILES framefit-release.aab"
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest gudo.apk --title "구도 최신 APK" --notes "main 브랜치 최신 빌드 (${GITHUB_SHA::7})" --prerelease
+          gh release create latest $FILES --title "프레임핏 최신 빌드" --notes "main 최신 빌드 (${GITHUB_SHA::7}, 빌드 번호 $((100 + GITHUB_RUN_NUMBER)))" --prerelease

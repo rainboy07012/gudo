@@ -1,6 +1,10 @@
 {
-  "appId": "io.github.rainboy07012.gudo",
-  "appName": "구도",
+  "appId": "io.github.rainboy07012.framefit",
+  "appName": "프레임핏",
   "webDir": "www",
-  "android": { "backgroundColor": "#0d0d0f" }
+  "backgroundColor": "#000000",
+  "android": { "backgroundColor": "#000000" },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 0 }
+  }
 }

@@ -1,12 +1,13 @@
 {
-  "name": "구도 가이드",
-  "short_name": "구도",
+  "name": "프레임핏",
+  "short_name": "프레임핏",
+  "description": "점을 원에 맞추면 구도가 완성되는 촬영 가이드 카메라",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0d0d0f",
-  "theme_color": "#0d0d0f",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "lang": "ko",
   "icons": [
     {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},

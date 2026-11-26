@@ -2,124 +2,294 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>구도 가이드</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>프레임핏</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#0d0d0f">
+<meta name="theme-color" content="#000000">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="구도">
+<meta name="apple-mobile-web-app-title" content="프레임핏">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
-:root{--bg:#0d0d0f;--panel:#17171b;--line:#2a2a30;--ink:#f3f3f5;--dim:#9a9aa3;--or:#ff8a3d;--bl:#3aa8ff;--gr:#3ddc6f;--ye:#e8b53a}
-*{box-sizing:border-box;margin:0;min-width:0}
-html,body{background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo","Noto Sans KR",sans-serif;-webkit-tap-highlight-color:transparent}
-body{min-height:100dvh;display:flex;justify-content:center;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
-.wrap{width:100%;max-width:520px;padding:12px 14px 24px;display:flex;flex-direction:column;gap:12px}
-header{display:flex;flex-direction:column;align-items:stretch;gap:10px}
-h1{font-size:18px;font-weight:700;letter-spacing:-.02em}
-.seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:3px}
-.seg button{border:0;background:none;color:var(--dim);font:inherit;font-size:14px;padding:8px 12px;border-radius:9px;min-height:38px}
-.seg button.on{background:#3a2a20;color:var(--or);font-weight:600}
-#stage{position:relative;width:100%;aspect-ratio:3/4;border-radius:18px;overflow:hidden;background:#000;touch-action:none;user-select:none;-webkit-user-select:none}
+/*
+  프레임핏 — 정밀 촬영 장비의 뷰파인더.
+  흰색 = 안내, 초록 = 지금 찍기, 파랑 = 누를 수 있는 동작, 주황 = PRO 표시에만.
+  뷰파인더는 모서리 없이 꽉 차게, 크롬은 검정 띠 위에만.
+*/
+:root{
+  --bg:#000;--surface:#17181a;--surface-2:#232528;--line:rgba(255,255,255,.12);
+  --ink:#f4f5f6;--ink-2:rgba(244,245,246,.68);--ink-3:rgba(244,245,246,.58);
+  --action:#1a73e8;--action-ink:#fff;--action-soft:rgba(26,115,232,.18);--action-text:#6aa8ff;
+  --go:#34d26b;--pro:#ff9a4d;--danger:#ff6b6b;
+  --ease-out:cubic-bezier(.23,1,.32,1);--ease-drawer:cubic-bezier(.32,.72,0,1);
+  --st:max(env(safe-area-inset-top),var(--safe-area-inset-top,0px));
+  --sb:max(env(safe-area-inset-bottom),var(--safe-area-inset-bottom,0px));
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;min-width:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--ink);overflow:hidden;overscroll-behavior:none}
+body{font:400 16px/1.45 "Pretendard Variable",Pretendard,"Noto Sans KR",system-ui,sans-serif;letter-spacing:-.02em;-webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;word-break:keep-all;overflow-wrap:anywhere}
+button{font:inherit;color:inherit;letter-spacing:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:2px solid var(--action-text);outline-offset:3px;border-radius:12px}
+::selection{background:var(--action);color:#fff}
+svg{display:block}
+[hidden]{display:none!important}
+
+.app{height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto auto;padding-top:var(--st);padding-bottom:var(--sb)}
+
+/* 상단 줄 */
+.top{height:56px;display:grid;grid-template-columns:48px 1fr 48px;align-items:center;padding:0 8px}
+.top-mid{display:flex;justify-content:center;gap:6px}
+.icon-btn{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;color:var(--ink);transition:transform 140ms var(--ease-out),background-color 200ms ease}
+.icon-btn:active{transform:scale(.94)}
+.icon-btn[aria-pressed=false]{color:var(--ink-3)}
+.icon-btn svg{width:24px;height:24px}
+.chip{height:28px;padding:0 10px;border-radius:14px;background:var(--surface-2);font-size:13px;font-weight:600;display:inline-flex;align-items:center;font-variant-numeric:tabular-nums}
+.chip.btn{height:32px;padding:0 14px;border-radius:16px;font-weight:600}
+.chip.btn:active{transform:scale(.96)}
+
+/* 뷰파인더 */
+.vf{display:grid;place-items:center;overflow:hidden}
+#stage{position:relative;height:100%;max-width:100%;aspect-ratio:3/4;background:#0b0b0c;touch-action:none;overflow:hidden}
 #stage canvas{position:absolute;inset:0;width:100%;height:100%}
 #vid{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.chip{position:absolute;padding:6px 12px;border-radius:999px;background:rgba(10,10,12,.72);font-size:14px}
-#zbadge{top:12px;right:12px}
-#srcTag{top:12px;left:12px;border-radius:6px;font-size:13px}
-#hint{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:min(88%,400px);text-align:center;border-radius:16px;padding:12px 16px;background:rgba(10,10,12,.82)}
-#hint b{display:block;font-size:16px;font-weight:700}
-#hint span{font-size:13px;color:var(--dim)}
-#hint.ok b{color:var(--gr)}
-#cap{position:absolute;left:50%;transform:translateX(-50%);bottom:104px;border:1.5px solid var(--ye);color:var(--ye);background:rgba(10,10,12,.85);border-radius:999px;padding:10px 22px;font:inherit;font-weight:700;font-size:16px;min-height:44px;animation:pulse 1.6s ease-in-out infinite}
-@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(232,181,58,.18)}}
-@media(prefers-reduced-motion:reduce){#cap{animation:none}}
-#empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;color:var(--dim);font-size:14px}
-#empty b{color:var(--ink);font-size:18px}
-.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-size:15px;border-radius:12px;padding:10px 16px;min-height:44px}
-.btn.pri{background:var(--or);border-color:var(--or);color:#1a0f07;font-weight:700}
-.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-.steps div{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--dim);white-space:nowrap}
-.steps i{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-style:normal;font-size:12px}
-.steps .done{color:var(--gr)}.steps .done i{border-color:var(--gr)}
-.steps .now{color:var(--or)}.steps .now i{border-color:var(--or)}
-.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.bar .sp{flex:1}
-#shutter{width:64px;height:64px;border-radius:50%;border:4px solid var(--ink);background:#fff;background-clip:content-box;padding:3px}
-#shutter:disabled{opacity:.3}
-#status{font-size:13px;color:var(--dim);min-height:20px}
-#shot{position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;z-index:9}
-#shot[hidden]{display:none}
-#shot img{max-width:100%;max-height:72dvh;border-radius:14px}
-#shot p{font-size:13px;color:var(--dim)}
-[hidden]{display:none!important}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+#flash.on{animation:flash 260ms var(--ease-out)}
+@keyframes flash{from{opacity:.75}to{opacity:0}}
+.vf-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:28px;text-align:center}
+.vf-state h2{font-size:19px;font-weight:600;line-height:1.3}
+.vf-state p{font-size:14px;color:var(--ink-2);max-width:28ch}
+
+/* 안내 한 줄 */
+.guide{min-height:76px;display:flex;align-items:center;gap:12px;padding:10px 20px}
+.guide-text{flex:1}
+#gTitle{font-size:17px;font-weight:600;line-height:1.3;transition:color 160ms ease}
+#gTitle.go{color:var(--go)}
+#gSub{font-size:14px;color:var(--ink-2);line-height:1.4;margin-top:2px;min-height:1.4em}
+
+/* 알약 버튼 */
+.pill{height:44px;padding:0 18px;border-radius:22px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;transition:transform 140ms var(--ease-out),background-color 200ms ease}
+.pill:active{transform:scale(.97)}
+.pill.primary{background:var(--action);color:var(--action-ink)}
+.pill.tonal{background:var(--action-soft);color:var(--action-text)}
+.pill.outline{border:1px solid rgba(255,255,255,.32)}
+.pill.lg{height:52px;border-radius:26px;font-size:16px;padding:0 24px}
+.pill.block{width:100%}
+
+/* 모드 탭 */
+.modes{display:flex;justify-content:center;gap:4px;padding:2px 12px 6px}
+.modes button{height:40px;padding:0 14px;border-radius:20px;font-size:15px;color:var(--ink-3);display:inline-flex;align-items:center;gap:4px;transition:color 200ms ease,background-color 200ms ease}
+.modes button[aria-selected=true]{color:var(--ink);background:var(--surface-2);font-weight:600}
+.pro{font-size:11px;font-weight:700;color:var(--pro);letter-spacing:0;transform:translateY(-6px)}
+
+/* 셔터 줄 */
+.controls{height:112px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 28px}
+.thumb{justify-self:start;width:52px;height:52px;border-radius:14px;overflow:hidden;background:var(--surface-2);display:grid;place-items:center;color:var(--ink-3);transition:transform 140ms var(--ease-out)}
+.thumb:active{transform:scale(.94)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb img.pop{animation:pop 320ms var(--ease-out)}
+@keyframes pop{from{transform:scale(.6);opacity:.4}}
+.controls .icon-btn{justify-self:end;width:52px;height:52px;background:var(--surface-2)}
+#shutter{width:78px;height:78px;border-radius:50%;border:4px solid var(--ink);display:grid;place-items:center;transition:border-color 160ms ease}
+#shutter span{width:62px;height:62px;border-radius:50%;background:var(--ink);transition:transform 120ms var(--ease-out)}
+#shutter:active span{transform:scale(.9)}
+#shutter.go{border-color:var(--go)}
+#shutter:disabled{opacity:.35}
+
+/* 스낵바 */
+#snack{position:fixed;left:16px;right:16px;bottom:calc(var(--sb) + 124px);margin:auto;max-width:420px;background:#2c2e31;color:var(--ink);border-radius:10px;padding:13px 16px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity 200ms ease,transform 300ms var(--ease-out);z-index:30}
+#snack.on{opacity:1;transform:none}
+
+/* 시작 화면 */
+#onboard{position:fixed;inset:0;z-index:40;background:var(--bg);display:flex;flex-direction:column;padding:calc(var(--st) + 24px) 24px calc(var(--sb) + 24px)}
+.ob-art{flex:1;display:grid;place-items:center;min-height:0}
+.ob-art svg{width:min(68vw,300px);height:auto}
+.ob-copy h1{font-size:28px;font-weight:600;line-height:1.2;letter-spacing:-.03em;text-wrap:balance}
+.ob-copy p{margin-top:12px;font-size:16px;color:var(--ink-2);line-height:1.55;max-width:34ch}
+.ob-copy small{display:block;margin-top:16px;font-size:13px;color:var(--ink-3)}
+.ob-actions{display:grid;gap:8px;margin-top:28px}
+.ob-dot{animation:obDot 3.2s var(--ease-out) infinite}
+.ob-ring{animation:obRing 3.2s ease infinite}
+@keyframes obDot{0%,12%{transform:translate(58px,46px)}55%,100%{transform:translate(0,0)}}
+@keyframes obRing{0%,52%{stroke:#f4f5f6}60%,100%{stroke:#34d26b}}
+.ob-dotfill{animation:obFill 3.2s ease infinite}
+@keyframes obFill{0%,52%{fill:#f4f5f6}60%,100%{fill:#34d26b}}
+
+/* 바텀 시트 */
+.sheet{position:fixed;inset:auto 0 0 0;margin:0 auto;max-width:560px;width:100%;max-height:85dvh;border:0;border-radius:24px 24px 0 0;background:var(--surface);color:var(--ink);padding:8px 0 calc(var(--sb) + 16px);transform:translateY(100%);transition:transform 300ms var(--ease-drawer),overlay 300ms allow-discrete,display 300ms allow-discrete}
+.sheet[open]{transform:none}
+@starting-style{.sheet[open]{transform:translateY(100%)}}
+.sheet::backdrop{background:rgba(0,0,0,.5);opacity:0;transition:opacity 300ms ease,overlay 300ms allow-discrete,display 300ms allow-discrete}
+.sheet[open]::backdrop{opacity:1}
+@starting-style{.sheet[open]::backdrop{opacity:0}}
+.handle{width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.22);margin:4px auto 12px}
+.sheet h2{font-size:20px;font-weight:600;padding:4px 24px 12px}
+.row{display:flex;align-items:center;gap:16px;min-height:60px;padding:8px 24px;width:100%;text-align:left;color:var(--ink);text-decoration:none}
+.row-text{flex:1}
+.row-text b{display:block;font-weight:400;font-size:16px}
+.row-text span{display:block;font-size:13px;color:var(--ink-3);margin-top:2px}
+.row svg{width:22px;height:22px;color:var(--ink-2);flex:none}
+.sep{height:1px;background:var(--line);margin:6px 24px}
+.switch{flex:none;width:52px;height:32px;border-radius:16px;background:#3a3d41;position:relative;transition:background-color 200ms ease}
+.switch::after{content:"";position:absolute;top:6px;left:6px;width:20px;height:20px;border-radius:50%;background:#9ba0a6;transition:transform 200ms var(--ease-out),background-color 200ms ease,width 200ms var(--ease-out),height 200ms var(--ease-out),top 200ms var(--ease-out)}
+[aria-checked=true] .switch{background:var(--action)}
+[aria-checked=true] .switch::after{transform:translateX(20px);background:#fff;width:24px;height:24px;top:4px;left:4px}
+.note{margin:8px 24px 0;padding:14px 16px;border-radius:14px;background:var(--surface-2);font-size:14px;color:var(--ink-2)}
+.note b{color:var(--pro);font-weight:600}
+.meta{padding:14px 24px 0;font-size:12px;color:var(--ink-3)}
+
+/* 사진 보기 */
+#review{position:fixed;inset:0;z-index:35;background:#000;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:var(--st) 0 var(--sb);opacity:0;transition:opacity 200ms ease}
+#review.on{opacity:1}
+#review .top{grid-template-columns:48px 1fr 48px}
+#review .title{text-align:center;font-size:15px;color:var(--ink-2)}
+#review figure{display:grid;place-items:center;overflow:hidden;padding:0 8px}
+#review img{max-width:100%;max-height:100%;object-fit:contain}
+.review-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 20px 20px}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}
+  .ob-dot{transform:none}
+}
+@media (min-width:700px){.controls{max-width:560px;width:100%;margin:0 auto}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>구도 가이드</h1>
-    <div class="seg" id="mode">
-      <button data-m="single" class="on">한 사람</button>
-      <button data-m="group">여럿</button>
-      <button data-m="land">풍경</button>
-      <button data-m="arch">건축</button>
+<div class="app">
+  <header class="top">
+    <button class="icon-btn" id="bSettings" aria-label="설정">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </button>
+    <div class="top-mid">
+      <span class="chip" id="chipZoom" hidden></span>
+      <span class="chip" id="chipEv" hidden></span>
+      <button class="chip btn" id="bEndPractice" hidden>연습 끝내기</button>
     </div>
+    <button class="icon-btn" id="bGrid" aria-pressed="true" aria-label="격자선">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><path d="M9.17 3.5v17M14.83 3.5v17M3.5 9.17h17M3.5 14.83h17"/></svg>
+    </button>
   </header>
 
-  <div id="stage">
-    <video id="vid" playsinline muted></video>
-    <canvas id="view"></canvas>
-    <canvas id="ov"></canvas>
-    <div id="empty">
-      <b>카메라를 움직여 점을 원에 맞추는 가이드</b>
-      실시간 카메라 또는 갖고 있는 사진으로 체험할 수 있어요.
-      <button class="btn pri" id="eCam">카메라 켜기</button>
-      <button class="btn" id="ePhoto">사진으로 체험</button>
+  <main class="vf">
+    <div id="stage">
+      <video id="vid" playsinline muted></video>
+      <canvas id="view"></canvas>
+      <canvas id="ov"></canvas>
+      <div id="flash"></div>
+      <div class="vf-state" id="vfState" hidden>
+        <h2 id="vfTitle"></h2>
+        <p id="vfBody"></p>
+        <button class="pill primary" id="vfRetry">다시 시도</button>
+        <button class="pill outline" id="vfPractice">사진으로 연습하기</button>
+      </div>
     </div>
-    <div class="chip" id="srcTag" hidden></div>
-    <div class="chip" id="zbadge" hidden>1.0x</div>
-    <button id="cap" hidden></button>
-    <div id="hint" hidden><b></b><span></span></div>
-  </div>
+  </main>
 
-  <div class="steps" id="steps">
-    <div data-s="zoom"><i>1</i>줌</div>
-    <div data-s="comp"><i>2</i>구도</div>
-    <div data-s="ev"><i>3</i>노출</div>
-    <div data-s="shot"><i>4</i>촬영</div>
-  </div>
+  <section class="guide" aria-live="polite">
+    <div class="guide-text">
+      <p id="gTitle">카메라를 준비하고 있어요</p>
+      <p id="gSub"></p>
+    </div>
+    <button class="pill tonal" id="cap" hidden></button>
+  </section>
 
-  <div class="bar">
-    <button class="btn" id="bCam">카메라</button>
-    <button class="btn" id="bPhoto">사진</button>
-    <button class="btn" id="bAuto" hidden>자동으로 맞추기</button>
-    <button class="btn" id="bRe">다시 분석</button>
-    <span class="sp"></span>
-    <button id="shutter" aria-label="촬영" disabled></button>
-  </div>
-  <div id="status">인식 모델 불러오는 중…</div>
-  <input type="file" id="file" accept="image/*" hidden>
+  <nav class="modes" id="modes" role="tablist" aria-label="촬영 모드">
+    <button role="tab" data-m="single" aria-selected="true">인물</button>
+    <button role="tab" data-m="group" aria-selected="false">여럿<span class="pro">PRO</span></button>
+    <button role="tab" data-m="land" aria-selected="false">풍경</button>
+    <button role="tab" data-m="arch" aria-selected="false">건축<span class="pro">PRO</span></button>
+  </nav>
+
+  <footer class="controls">
+    <button class="thumb" id="bThumb" aria-label="방금 찍은 사진 보기">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M3.5 16l5-4.5 4 3.5 3-2.5 5 4"/><circle cx="15.5" cy="9.5" r="1.5"/></svg>
+      <img id="thumbImg" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="" hidden>
+    </button>
+    <button id="shutter" aria-label="촬영" disabled><span></span></button>
+    <button class="icon-btn" id="bFlip" aria-label="앞뒤 카메라 전환">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10a8 8 0 0 0-14.6-3.5M4 14a8 8 0 0 0 14.6 3.5"/><path d="M5 3v4h4M19 21v-4h-4"/></svg>
+    </button>
+  </footer>
 </div>
 
-<div id="shot" hidden>
-  <img id="shotImg" alt="촬영한 사진">
-  <p>길게 눌러 저장하거나 아래 버튼을 누르세요</p>
-  <div class="bar"><a class="btn pri" id="shotDl" download="gudo.jpg">저장</a><button class="btn" id="shotClose">닫기</button></div>
+<div id="snack" role="status"></div>
+
+<div id="onboard" hidden>
+  <div class="ob-art" aria-hidden="true">
+    <svg viewBox="0 0 240 320">
+      <rect x="1" y="1" width="238" height="318" rx="4" fill="#0b0b0c" stroke="rgba(255,255,255,.14)"/>
+      <path d="M80 1v318M160 1v318M1 107h238M1 213h238" stroke="rgba(255,255,255,.28)"/>
+      <circle class="ob-ring" cx="80" cy="107" r="17" fill="none" stroke="#f4f5f6" stroke-width="3"/>
+      <g class="ob-dot"><circle class="ob-dotfill" cx="80" cy="107" r="8" fill="#f4f5f6"/></g>
+    </svg>
+  </div>
+  <div class="ob-copy">
+    <h1>점을 원 안에 넣으면, 그때가 찍을 때예요</h1>
+    <p>인물, 풍경, 건물에 맞는 자리를 화면에 표시해 드려요. 원이 초록색으로 바뀌면 셔터를 누르세요.</p>
+    <small>사진과 화면 분석은 모두 휴대폰 안에서만 처리돼요.</small>
+  </div>
+  <div class="ob-actions">
+    <button class="pill primary lg block" id="obStart">카메라 시작</button>
+    <button class="pill lg block" id="obPractice">갖고 있는 사진으로 먼저 해보기</button>
+  </div>
 </div>
+
+<dialog class="sheet" id="settings" aria-label="설정">
+  <div class="handle"></div>
+  <h2>설정</h2>
+  <button class="row" role="switch" id="swGrid" aria-checked="true">
+    <span class="row-text"><b>격자선</b><span>화면을 가로세로 3등분하는 선</span></span><span class="switch"></span>
+  </button>
+  <button class="row" role="switch" id="swHaptic" aria-checked="true">
+    <span class="row-text"><b>맞으면 진동</b><span>원이 초록색이 될 때 짧게 진동</span></span><span class="switch"></span>
+  </button>
+  <div class="sep"></div>
+  <button class="row" id="rowPractice">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M3.5 16l5-4.5 4 3.5 3-2.5 5 4"/></svg>
+    <span class="row-text"><b>사진으로 연습하기</b><span>갖고 있는 사진을 끌어서 구도를 맞춰봐요</span></span>
+  </button>
+  <a class="row" href="privacy.html">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.2-3 7.6-7 9-4-1.4-7-4.8-7-9V6z"/></svg>
+    <span class="row-text"><b>개인정보처리방침</b><span>사진은 휴대폰 밖으로 나가지 않아요</span></span>
+  </a>
+  <p class="note"><b>PRO</b> 여럿·건축 모드는 베타 기간 동안 무료로 열려 있어요.</p>
+  <p class="meta">프레임핏 1.0.0</p>
+</dialog>
+
+<div id="review" hidden>
+  <header class="top">
+    <button class="icon-btn" id="rvClose" aria-label="닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <p class="title" id="rvTitle">방금 찍은 사진</p>
+    <span></span>
+  </header>
+  <figure><img id="rvImg" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="방금 찍은 사진"></figure>
+  <div class="review-actions">
+    <button class="pill outline lg" id="rvShare">공유</button>
+    <button class="pill primary lg" id="rvSave">저장</button>
+  </div>
+</div>
+
+<input type="file" id="file" accept="image/*" hidden>
 
 <script type="module">
 {
 const $=s=>document.querySelector(s);
 const stage=$('#stage'),cv=$('#view'),ov=$('#ov'),vid=$('#vid');
 const ctx=cv.getContext('2d'),oc=ov.getContext('2d');
-const C={or:'#ff8a3d',bl:'#3aa8ff',gr:'#3ddc6f',ye:'#e8b53a'};
+const C={ink:'#f4f5f6',dim:'rgba(244,245,246,.34)',go:'#34d26b'};
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
-const S={src:null,mode:'single',img:null,zoom:1,hwZoom:false,pan:{x:0,y:0},center:false,dets:[],sm:null,target:null,ok:false,
-  recZoom:null,zoomDone:false,ev:null,evDone:false,evApplied:0,evFactor:1,shot:false,
-  det:null,loading:true,pending:false,lastDet:0,lastTs:0,lastEv:0,track:null,anim:null};
+const NATIVE=!!window.Capacitor?.isNativePlatform?.();
+const P=window.Capacitor?.Plugins||{};
+const store={get(k,d){try{const v=localStorage.getItem('ff_'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('ff_'+k,JSON.stringify(v))}catch(e){}}};
+
+const S={src:null,mode:'single',img:null,zoom:1,hwZoom:false,pan:{x:0,y:0},center:false,dets:[],sm:null,prevBox:null,target:null,ok:false,
+  recZoom:null,zoomDone:false,ev:null,evDone:false,evApplied:0,evFactor:1,
+  det:null,loading:true,pending:false,lastDet:0,lastTs:0,lastEv:0,lastScan:0,track:null,anim:null,facing:'environment',
+  grid:store.get('grid',true),haptic:store.get('haptic',true),hz:null,bc:null,scene:null,tilt:null,shot:null,camError:null};
 let W=0,H=0,dpr=1;
 
+/* ---------- 크기 ---------- */
 function resize(){
   const r=stage.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;
   for(const c of [cv,ov]){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr)}
@@ -141,8 +311,13 @@ function view(){
   S.pan.x=clamp(S.pan.x,W-iw,0);S.pan.y=clamp(S.pan.y,H-ih,0);
   return {s,ox:S.pan.x,oy:S.pan.y,w,h};
 }
-const toStage=(nx,ny,v)=>[v.ox+nx*v.w*v.s,v.oy+ny*v.h*v.s];
+const mirrored=()=>S.src==='cam'&&S.facing==='user';
+function toStage(nx,ny,v){
+  let x=v.ox+nx*v.w*v.s;const y=v.oy+ny*v.h*v.s;
+  if(mirrored())x=W-x;return [x,y];
+}
 
+/* ---------- 피사체 ---------- */
 function union(ps){
   const x0=Math.min(...ps.map(d=>d.x)),y0=Math.min(...ps.map(d=>d.y));
   const x1=Math.max(...ps.map(d=>d.x+d.w)),y1=Math.max(...ps.map(d=>d.y+d.h));
@@ -152,40 +327,33 @@ function iou(a,b){
   const x0=Math.max(a.x,b.x),y0=Math.max(a.y,b.y),x1=Math.min(a.x+a.w,b.x+b.w),y1=Math.min(a.y+a.h,b.y+b.h);
   const i=Math.max(0,x1-x0)*Math.max(0,y1-y0);return i/(a.w*a.h+b.w*b.h-i||1);
 }
-// 흔들림 보정: 박스 전체를 부드럽게 따라가고, 아주 작은 변화는 무시
-function stabilize(sub,now){
-  if(!sub){
-    if(S.sm&&now-S.sm.seen<700)return S.sm.sub;   // 잠깐 놓쳐도 0.7초간 유지
-    S.sm=null;return null;
-  }
-  if(!S.sm){S.sm={sub:{...sub},seen:now};return S.sm.sub}
-  const p=S.sm.sub,dead=.012*W;
-  for(const k of ['x0','y0','x1','y1','ax','ay']){
-    const d=sub[k]-p[k];
-    if(Math.abs(d)<dead)continue;                  // 데드존
-    const a=Math.abs(d)>.15*W?.5:.12;              // 크게 움직이면 빨리, 작게는 천천히
-    p[k]+=d*a;
-  }
-  p.people=sub.people;p.person=sub.person;p.group=sub.group;S.sm.seen=now;
-  return p;
+function boxToStage(b,v){
+  const [ax,ay]=toStage(b.x,b.y,v),[bx,by]=toStage(b.x+b.w,b.y+b.h,v);
+  return [Math.min(ax,bx),Math.min(ay,by),Math.max(ax,bx),Math.max(ay,by)];
 }
 function subject(v){
   const ps=S.dets.filter(d=>d.cat==='person');
   const list=ps.length?ps:S.dets;if(!list.length)return null;
   const group=S.mode==='group'&&ps.length>0;
+  const biggest=()=>list.reduce((a,b)=>a.w*a.h>b.w*b.h?a:b);
   let box;
   if(group)box=union(ps);
-  else if(S.prevBox){
-    const best=list.map(d=>[iou(d,S.prevBox),d]).sort((a,b)=>b[0]-a[0])[0];
-    box=best[0]>.2?best[1]:list.reduce((a,b)=>a.w*a.h>b.w*b.h?a:b);
-  }else box=list.reduce((a,b)=>a.w*a.h>b.w*b.h?a:b);
+  else if(S.prevBox){const best=list.map(d=>[iou(d,S.prevBox),d]).sort((a,b)=>b[0]-a[0])[0];box=best[0]>.2?best[1]:biggest()}
+  else box=biggest();
   S.prevBox=box;
-  const [x0,y0]=toStage(box.x,box.y,v),[x1,y1]=toStage(box.x+box.w,box.y+box.h,v);
-  const person=box.cat==='person';
-  const ax=(x0+x1)/2,ay=person?y0+(y1-y0)*(group?0.22:0.32):(y0+y1)/2;
-  return {x0,y0,x1,y1,ax,ay,person,group,people:ps.map(d=>{const [a,b]=toStage(d.x,d.y,v),[c,e]=toStage(d.x+d.w,d.y+d.h,v);return [a,b,c,e]})};
+  const [x0,y0,x1,y1]=boxToStage(box,v),person=box.cat==='person';
+  return {x0,y0,x1,y1,ax:(x0+x1)/2,ay:person?y0+(y1-y0)*(group?.22:.32):(y0+y1)/2,person,group,people:ps.map(d=>boxToStage(d,v))};
 }
-
+function stabilize(sub,now){
+  if(!sub){if(S.sm&&now-S.sm.seen<700)return S.sm.sub;S.sm=null;return null}
+  if(!S.sm){S.sm={sub:{...sub},seen:now};return S.sm.sub}
+  const p=S.sm.sub,dead=.012*W;
+  for(const k of ['x0','y0','x1','y1','ax','ay']){
+    const d=sub[k]-p[k];if(Math.abs(d)<dead)continue;
+    p[k]+=d*(Math.abs(d)>.15*W?.5:.12);
+  }
+  p.people=sub.people;p.person=sub.person;p.group=sub.group;S.sm.seen=now;return p;
+}
 function pickTarget(sub){
   if(sub.group)S.target={x:.5,y:1/3};
   else S.target={x:sub.ax/W<.5?1/3:2/3,y:sub.ay/H<.5?1/3:2/3};
@@ -196,12 +364,13 @@ function pickTarget(sub){
   }
 }
 
+/* ---------- 상태 초기화 / 줌 / 노출 ---------- */
 function reset(){
   S.target=null;S.ok=false;S.sm=null;S.prevBox=null;S.recZoom=null;S.zoomDone=false;S.hz=null;S.bc=null;S.scene=null;
-  S.ev=null;S.evDone=false;S.evApplied=0;S.evFactor=1;S.shot=false;cv.style.filter='';
+  S.ev=null;S.evDone=false;S.evApplied=0;S.evFactor=1;cv.style.filter='';
   if(S.track){const c=S.track.getCapabilities?.()||{};if(c.exposureCompensation)S.track.applyConstraints({advanced:[{exposureCompensation:0}]}).catch(()=>{})}
+  lastUI='';
 }
-
 async function applyZoom(){
   const z=S.recZoom;if(!z)return;
   if(S.src==='cam'&&S.track){
@@ -214,7 +383,6 @@ async function applyZoom(){
   }
   S.zoom=z;S.zoomDone=true;S.recZoom=null;S.target=null;S.ok=false;S.sm=null;
 }
-
 async function applyEv(){
   const ev=S.ev;let hw=false;
   if(S.src==='cam'&&S.track){
@@ -224,12 +392,10 @@ async function applyEv(){
   if(!hw){S.evFactor=2**(ev/2.2);cv.style.filter=`brightness(${S.evFactor.toFixed(3)})`}
   S.evDone=true;S.evApplied=ev;
 }
-
 const probe=document.createElement('canvas');probe.width=48;probe.height=64;
 const pc=probe.getContext('2d',{willReadFrequently:true});
 function measureEv(sub){
-  pc.drawImage(cv,0,0,48,64);
-  const d=pc.getImageData(0,0,48,64).data;
+  pc.drawImage(cv,0,0,48,64);const d=pc.getImageData(0,0,48,64).data;
   const bx0=Math.floor(clamp(sub.x0/W,0,1)*48),bx1=Math.ceil(clamp(sub.x1/W,0,1)*48);
   const by0=Math.floor(clamp(sub.y0/H,0,1)*64),by1=Math.ceil(clamp(sub.y1/H,0,1)*64);
   let all=0,n=0,sb=0,m=0;
@@ -242,122 +408,34 @@ function measureEv(sub){
   if(Math.abs(ev)<.3){S.evDone=true;S.evApplied=0}else S.ev=ev;
 }
 
+/* ---------- 인식 ---------- */
 function norm(dets,w,h){
-  return dets.map(d=>({x:d.boundingBox.originX/w,y:d.boundingBox.originY/h,w:d.boundingBox.width/w,h:d.boundingBox.height/h,
-    cat:d.categories?.[0]?.categoryName||'',score:d.categories?.[0]?.score||0}));
+  return dets.map(d=>({x:d.boundingBox.originX/w,y:d.boundingBox.originY/h,w:d.boundingBox.width/w,h:d.boundingBox.height/h,cat:d.categories?.[0]?.categoryName||''}));
 }
 function nextTs(){S.lastTs=Math.max(performance.now(),S.lastTs+1);return S.lastTs}
 function detectPhoto(){
   if(!S.det){S.pending=true;return}
   S.pending=false;
   try{const r=S.det.detectForVideo(S.img,nextTs());S.dets=norm(r.detections,S.img.naturalWidth,S.img.naturalHeight)}catch(e){S.dets=[]}
-  if(!S.dets.length)status('피사체를 못 찾았어요. 사진 속 주인공을 탭해 지정해주세요.');
 }
 
-function dirText(sub){
-  if(S.mode==="land"||S.mode==="arch")return sceneDir();
-  const dx=(sub.ax-S.target.x*W)/W,dy=(sub.ay-S.target.y*H)/H,cam=S.src==='cam';
-  const h=Math.abs(dx)>.025?(cam?(dx>0?'오른쪽으로 돌려보세요':'왼쪽으로 돌려보세요'):(dx>0?'왼쪽으로 끌어보세요':'오른쪽으로 끌어보세요')):'';
-  const vt=Math.abs(dy)>.025?(cam?(dy>0?'아래로 기울여보세요':'위로 들어보세요'):(dy>0?'위로 끌어보세요':'아래로 끌어보세요')):'';
-  const first=Math.abs(dx)>=Math.abs(dy)?h:vt,second=first===h?vt:h;
-  return (cam?'카메라를 ':'사진을 ')+(first||second)+(first&&second?' · 조금 '+second.replace(/보세요$/,'요'):'');
-}
-
-function line(x0,y0,x1,y1){oc.beginPath();oc.moveTo(x0,y0);oc.lineTo(x1,y1);oc.stroke()}
-function corners(x0,y0,x1,y1,col){
-  const L=Math.min(28,(x1-x0)/3,(y1-y0)/3);oc.strokeStyle=col;oc.lineWidth=3.5;oc.lineCap='round';
-  for(const [x,y,sx,sy] of [[x0,y0,1,1],[x1,y0,-1,1],[x0,y1,1,-1],[x1,y1,-1,-1]]){
-    oc.beginPath();oc.moveTo(x,y+sy*L);oc.lineTo(x,y);oc.lineTo(x+sx*L,y);oc.stroke();
-  }
-}
-function drawOv(sub,now){
-  oc.clearRect(0,0,W,H);
-  oc.setLineDash([]);oc.lineWidth=1;oc.strokeStyle='rgba(255,255,255,.35)';
-  for(const f of [1/3,2/3])line(f*W,0,f*W,H);
-  oc.lineWidth=2.5;oc.strokeStyle=C.or;
-  for(const f of [1/3,2/3])line(0,f*H,W,f*H);
-  if(!sub||!S.target)return;
-  const tx=S.target.x*W,ty=S.target.y*H,col=S.ok?C.gr:C.bl;
-  oc.setLineDash([7,6]);oc.lineWidth=2;oc.strokeStyle=C.or;
-  if(sub.group){line(tx,ty,W*.04,H);line(tx,ty,W*.96,H)}else line(tx,0,tx,H);
-  oc.setLineDash([]);
-  if(sub.group){oc.strokeStyle='rgba(232,181,58,.8)';oc.lineWidth=2;for(const [a,b,c,e] of sub.people){oc.beginPath();oc.roundRect?oc.roundRect(a,b,c-a,e-b,10):oc.rect(a,b,c-a,e-b);oc.stroke()}}
-  corners(sub.x0,sub.y0,sub.x1,sub.y1,col);
-  oc.strokeStyle=col;oc.lineWidth=3;oc.beginPath();oc.arc(tx,ty,17,0,7);oc.stroke();
-  if(S.ok){const p=(now%1400)/1400;oc.globalAlpha=1-p;oc.lineWidth=2;oc.beginPath();oc.arc(tx,ty,17+p*18,0,7);oc.stroke();oc.globalAlpha=1}
-  oc.fillStyle=col;oc.beginPath();oc.arc(sub.ax,sub.ay,9,0,7);oc.fill();
-}
-
-let lastUI='';
-const hint=$('#hint'),cap=$('#cap');let capAct=null;
-function ui(sub){
-  let t,s,ok=false,c=null;
-  if(!S.src)return;
-  if(!sub){t=S.mode==='land'?'수평선을 찾는 중…':S.loading?'인식 모델 불러오는 중…':'피사체를 찾는 중…';s=S.mode==='land'?'하늘과 땅의 경계가 보이게 담아주세요':S.src==='photo'?'사진 속 주인공을 탭해서 직접 지정할 수 있어요':'사람이나 물체를 화면에 담아주세요'}
-  else if(S.recZoom){t=`${S.recZoom}x 줌을 추천해요`;s='노란 캡슐을 누르면 적용돼요';c=['zoom',`${S.recZoom}x 적용`]}
-  else if(!S.ok){t=S.mode==='land'?'수평선을 주황 선에 맞춰보세요':S.mode==='arch'?'건물을 반듯하게, 가운데로':'점을 원에 맞춰보세요';s=dirText(sub)}
-  else if(!S.evDone){ok=true;t='좋아요! 구도가 맞았어요';
-    if(S.ev==null)s='밝기를 확인하는 중…';else{s='노출 캡슐을 누르면 밝기도 맞춰져요';c=['ev',`밝기 ${S.ev>0?'↑ +':'↓ '}${S.ev}`]}}
-  else{ok=true;t=S.shot?'찍었어요! 다시 맞춰볼 수 있어요':'지금 찍으세요';s='초록이면 준비 완료예요'}
-  const zb=`${S.zoom.toFixed(1)}x${S.evApplied?` · ${S.evApplied>0?'+':''}${S.evApplied}`:''}`;
-  const key=[t,s,ok,c&&c[1],zb,S.zoomDone,S.ok,S.evDone,S.shot].join('|');
-  if(key===lastUI)return;lastUI=key;
-  hint.hidden=false;hint.classList.toggle('ok',ok);hint.querySelector('b').textContent=t;hint.querySelector('span').textContent=s;
-  cap.hidden=!c;if(c){cap.textContent=c[1];capAct=c[0]}
-  $('#zbadge').hidden=false;$('#zbadge').textContent=zb;
-  $('#shutter').disabled=!S.src;
-  const st={zoom:S.zoomDone,comp:S.ok,ev:S.evDone,shot:S.shot};
-  let nowSet=false;
-  for(const el of document.querySelectorAll('#steps div')){
-    const done=!!st[el.dataset.s];el.classList.toggle('done',done);
-    const isNow=!done&&!nowSet&&!!sub;el.classList.toggle('now',isNow);if(isNow)nowSet=true;
-  }
-}
-cap.addEventListener('click',e=>{e.stopPropagation();if(capAct==='zoom')applyZoom();else if(capAct==='ev')applyEv()});
-
-function frame(now){
-  requestAnimationFrame(frame);
-  if(!S.src)return;
-  const v=view();if(!v)return;
-  if(S.anim){const a=S.anim,p=clamp((now-a.t0)/450,0,1),e=1-(1-p)**3;
-    S.pan={x:a.from.x+(a.to.x-a.from.x)*e,y:a.from.y+(a.to.y-a.from.y)*e};if(p>=1)S.anim=null}
-  ctx.clearRect(0,0,W,H);
-  if(S.src==='cam'&&vid.readyState<2)return;
-  ctx.drawImage(S.src==='cam'?vid:S.img,v.ox,v.oy,v.w*v.s,v.h*v.s);
-  if(S.mode==='land'||S.mode==='arch'){sceneFrame(now);return}
-  if(S.src==='cam'&&S.det&&now-S.lastDet>90){
-    S.lastDet=now;try{const r=S.det.detectForVideo(vid,nextTs());S.dets=norm(r.detections,vid.videoWidth,vid.videoHeight)}catch(e){}
-  }
-  let sub=subject(v);
-  if(S.src==='cam')sub=stabilize(sub,now);
-  if(sub&&!S.target)pickTarget(sub);
-  if(sub&&S.target){
-    const d=Math.hypot((sub.ax-S.target.x*W)/W,(sub.ay-S.target.y*H)/H);
-    S.ok=S.ok?d<.055:d<.035;
-    if(S.ok&&!S.recZoom&&!S.evDone&&S.ev==null&&now-S.lastEv>400){S.lastEv=now;measureEv(sub)}
-  }else S.ok=false;
-  drawOv(sub,now);ui(sub);
-}
-requestAnimationFrame(frame);
-
-
-// ===== 풍경·건축 모드 =====
+/* ---------- 기울기 센서 ---------- */
 const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 let sensorsOn=false;
 function onMotion(e){
   const g=e.accelerationIncludingGravity;if(!g||g.x==null)return;
   let x=g.x,y=g.y,z=g.z;if(isIOS){x=-x;y=-y;z=-z}
-  const roll=Math.atan2(x,y)*180/Math.PI,pitch=Math.atan2(z,Math.hypot(x,y))*180/Math.PI,p=S.tilt;
-  S.tilt=p?{roll:p.roll+(roll-p.roll)*.2,pitch:p.pitch+(pitch-p.pitch)*.2,t:performance.now()}:{roll,pitch,t:performance.now()};
+  const roll=Math.atan2(x,y)*180/Math.PI,pitch=Math.atan2(z,Math.hypot(x,y))*180/Math.PI,p=S.tilt,t=performance.now();
+  S.tilt=p?{roll:p.roll+(roll-p.roll)*.2,pitch:p.pitch+(pitch-p.pitch)*.2,t}:{roll,pitch,t};
 }
 async function enableSensors(){
   if(sensorsOn)return;
   try{if(typeof DeviceMotionEvent!=='undefined'&&DeviceMotionEvent.requestPermission){if(await DeviceMotionEvent.requestPermission()!=='granted')return}}catch(e){return}
   addEventListener('devicemotion',onMotion);sensorsOn=true;
 }
-function tiltNow(now){
-  const t=S.tilt;return S.src==='cam'&&t&&now-t.t<1000&&Math.abs(t.roll)<45?t:null;
-}
+const tiltNow=now=>{const t=S.tilt;return S.src==='cam'&&t&&now-t.t<1000&&Math.abs(t.roll)<45?t:null};
+
+/* ---------- 풍경·건축 분석 ---------- */
 const scv=document.createElement('canvas');scv.width=60;scv.height=80;
 const scx=scv.getContext('2d',{willReadFrequently:true});
 function robustFit(pts){
@@ -373,7 +451,6 @@ function scan(now){
   scx.drawImage(cv,0,0,60,80);const d=scx.getImageData(0,0,60,80).data,g=new Float32Array(4800);
   for(let i=0;i<4800;i++)g[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];
   if(S.mode==='land'){
-    // 열마다 '위는 밝고 아래는 어두운' 경계가 가장 센 곳 → 직선으로 맞춤
     const pts=[];
     for(let x=0;x<60;x++){
       let best=0,by=-1;
@@ -385,15 +462,14 @@ function scan(now){
       S.hz=h?{y:h.y+(y-h.y)*.3,ang:h.ang+(ang-h.ang)*.3,seen:now}:{y,ang,seen:now}}
     else if(S.hz&&now-S.hz.seen>800)S.hz=null;
   }else{
-    // 세로 윤곽이 몰린 곳의 무게중심 = 건물 중심
     let sw=0,sxw=0;
     for(let x=1;x<59;x++){let e=0;for(let y=8;y<72;y++){const i=y*60+x;e+=Math.abs(g[i+1]-g[i-1])}e*=e;sw+=e;sxw+=e*x}
     if(sw>0){const c=(sxw/sw)/59;S.bc=S.bc==null?c:S.bc+(c-S.bc)*.3}
   }
 }
-function sceneFrame(now){
+function sceneState(now){
   S.zoomDone=true;S.recZoom=null;
-  if(now-S.lastScan>140||!S.lastScan){S.lastScan=now;scan(now)}
+  if(!S.lastScan||now-S.lastScan>140){S.lastScan=now;scan(now)}
   const land=S.mode==='land',t=tiltNow(now),cam=S.src==='cam';
   let sub=null;
   if(land&&S.hz){if(!S.target)S.target={x:.5,y:S.hz.y<.5?1/3:2/3};sub={x0:0,y0:0,x1:W,y1:H,ax:W/2,ay:S.hz.y*H}}
@@ -402,144 +478,361 @@ function sceneFrame(now){
     const tilt=cam?(t?t.roll:(land?S.hz.ang:0)):0;
     const lvlOk=Math.abs(tilt)<(S.ok?2.2:1.5)&&(land||!t||Math.abs(t.pitch)<(S.ok?4.5:3));
     const dd=land?Math.abs(sub.ay/H-S.target.y):Math.abs(sub.ax/W-.5);
-    const posOk=dd<(S.ok?.045:.028);
-    S.ok=lvlOk&&posOk;S.scene={tilt,pitch:t?t.pitch:null,lvlOk,posOk};
+    setOk(lvlOk&&dd<(S.ok?.045:.028));
+    S.scene={tilt,pitch:t?t.pitch:null,lvlOk};
     if(S.ok&&!S.evDone&&S.ev==null&&now-S.lastEv>400){S.lastEv=now;measureEv(sub)}
-  }else S.ok=false;
-  drawScene(sub,t,now);ui(sub);
+  }else setOk(false);
+  return {sub,t};
 }
-function sceneDir(){
-  const s=S.scene,cam=S.src==='cam';if(!s)return '';
-  if(!s.lvlOk){
-    if(S.mode==='arch'&&s.pitch!=null&&Math.abs(s.pitch)>=3&&Math.abs(s.tilt)<1.5)
-      return s.pitch>0?`카메라가 위로 ${Math.abs(s.pitch).toFixed(0)}° 들렸어요 · 세워서 찍고, 안 담기면 뒤로 물러나세요`:`카메라가 아래로 ${Math.abs(s.pitch).toFixed(0)}° 숙여졌어요 · 똑바로 세워주세요`;
-    return `수평이 ${Math.abs(s.tilt).toFixed(1)}° 기울었어요 · ${s.tilt<0?'왼쪽':'오른쪽'}으로 살짝 돌려보세요`;
+
+/* ---------- 안내 문구 ---------- */
+function dirText(sub){
+  const cam=S.src==='cam';
+  if(S.mode==='land'||S.mode==='arch'){
+    const s=S.scene;if(!s)return '';
+    if(!s.lvlOk){
+      if(S.mode==='arch'&&s.pitch!=null&&Math.abs(s.pitch)>=3&&Math.abs(s.tilt)<1.5)
+        return s.pitch>0?`위로 ${Math.abs(s.pitch).toFixed(0)}° 들려 있어요. 휴대폰을 세우고, 안 담기면 뒤로 물러나세요`:`아래로 ${Math.abs(s.pitch).toFixed(0)}° 숙여져 있어요. 똑바로 세워주세요`;
+      return `${Math.abs(s.tilt).toFixed(1)}° 기울었어요. ${s.tilt<0?'왼쪽':'오른쪽'}으로 살짝 돌려주세요`;
+    }
+    if(S.mode==='land'){const up=S.hz.y<S.target.y;
+      return cam?(up?'휴대폰을 조금 위로 들어주세요':'휴대폰을 조금 아래로 숙여주세요'):(up?'사진을 아래로 끌어주세요':'사진을 위로 끌어주세요')}
+    const right=S.bc>.5;
+    return cam?`${right?'오른쪽':'왼쪽'}으로 돌려 건물을 가운데에 두세요`:`사진을 ${right?'왼쪽':'오른쪽'}으로 끌어주세요`;
   }
-  if(S.mode==='land'){const up=S.hz.y<S.target.y;
-    return cam?(up?'카메라를 위로 들어 수평선을 내려보세요':'카메라를 아래로 숙여 수평선을 올려보세요'):(up?'사진을 아래로 끌어보세요':'사진을 위로 끌어보세요')}
-  const right=S.bc>.5;
-  return cam?`카메라를 ${right?'오른쪽':'왼쪽'}으로 돌려 건물을 가운데로`:`사진을 ${right?'왼쪽':'오른쪽'}으로 끌어보세요`;
+  const dx=(sub.ax-S.target.x*W)/W,dy=(sub.ay-S.target.y*H)/H;
+  const hx=Math.abs(dx)>.025?(cam?(dx>0?'오른쪽으로 돌려주세요':'왼쪽으로 돌려주세요'):(dx>0?'왼쪽으로 끌어주세요':'오른쪽으로 끌어주세요')):'';
+  const vy=Math.abs(dy)>.025?(cam?(dy>0?'아래로 기울여주세요':'위로 들어주세요'):(dy>0?'위로 끌어주세요':'아래로 끌어주세요')):'';
+  const first=Math.abs(dx)>=Math.abs(dy)?hx:vy;
+  return (cam?'휴대폰을 ':'사진을 ')+(first||hx||vy);
+}
+
+let lastUI='',capAct=null,wasOk=false;
+function setOk(v){
+  S.ok=v;
+  if(v&&!wasOk)haptic();
+  wasOk=v;
+}
+function ui(sub){
+  let t,s='',go=false,c=null;
+  const scene=S.mode==='land'||S.mode==='arch';
+  if(!sub){
+    if(scene){t=S.mode==='land'?'수평선을 찾고 있어요':'건물을 찾고 있어요';s=S.mode==='land'?'하늘과 땅의 경계가 보이게 담아주세요':'건물 정면이 보이게 담아주세요'}
+    else{t=S.loading?'인식을 준비하고 있어요':'찍을 대상을 찾고 있어요';s=S.src==='photo'?'주인공을 탭하면 직접 지정할 수 있어요':'사람이나 물건을 화면에 담아주세요'}
+  }
+  else if(S.recZoom){t=`${S.recZoom}배로 당기면 더 좋아요`;s='대상이 화면에 비해 작아요';c=['zoom',`${S.recZoom}× 적용`]}
+  else if(!S.ok){t=S.mode==='land'?'수평선을 흰 선에 맞춰주세요':S.mode==='arch'?'건물을 반듯하게 맞춰주세요':'점을 원 안에 넣어주세요';s=dirText(sub)}
+  else if(!S.evDone){go=true;t='구도가 맞았어요';
+    if(S.ev==null)s='밝기를 확인하고 있어요';else{s=S.ev>0?'조금 어두워요. 밝기를 올릴까요?':'조금 밝아요. 밝기를 내릴까요?';c=['ev',`밝기 ${S.ev>0?'+':''}${S.ev}`]}}
+  else{go=true;t='지금 찍으세요';s=S.src==='photo'?'셔터를 누르면 이 구도로 잘라 저장해요':'초록색일 때 셔터를 누르세요'}
+  const zoomTxt=S.zoom>1?`${S.zoom.toFixed(1)}×`:'',evTxt=S.evApplied?`${S.evApplied>0?'+':''}${S.evApplied} EV`:'';
+  const key=[t,s,go,c&&c[1],zoomTxt,evTxt,S.ok].join('|');
+  $('#shutter').classList.toggle('go',S.ok);
+  if(key===lastUI)return;lastUI=key;
+  $('#gTitle').textContent=t;$('#gTitle').classList.toggle('go',go);$('#gSub').textContent=s;
+  const cap=$('#cap');cap.hidden=!c;if(c){cap.textContent=c[1];capAct=c[0]}
+  $('#chipZoom').hidden=!zoomTxt;$('#chipZoom').textContent=zoomTxt;
+  $('#chipEv').hidden=!evTxt;$('#chipEv').textContent=evTxt;
+}
+$('#cap').addEventListener('click',()=>{if(capAct==='zoom')applyZoom();else if(capAct==='ev')applyEv()});
+
+/* ---------- 그리기 ---------- */
+function line(x0,y0,x1,y1){oc.beginPath();oc.moveTo(x0,y0);oc.lineTo(x1,y1);oc.stroke()}
+function gridLines(skipH){
+  if(!S.grid)return;
+  oc.setLineDash([]);oc.lineWidth=1;oc.strokeStyle=C.dim;
+  for(const f of [1/3,2/3]){line(f*W,0,f*W,H);if(!skipH)line(0,f*H,W,f*H)}
+}
+function corners(x0,y0,x1,y1,col){
+  const L=Math.min(26,(x1-x0)/3,(y1-y0)/3);oc.strokeStyle=col;oc.lineWidth=3;oc.lineCap='round';
+  for(const [x,y,sx,sy] of [[x0,y0,1,1],[x1,y0,-1,1],[x0,y1,1,-1],[x1,y1,-1,-1]]){
+    oc.beginPath();oc.moveTo(x,y+sy*L);oc.lineTo(x,y);oc.lineTo(x+sx*L,y);oc.stroke();
+  }
+}
+function targetMark(sub,now){
+  const tx=S.target.x*W,ty=S.target.y*H,col=S.ok?C.go:C.ink;
+  oc.setLineDash([]);oc.strokeStyle=col;oc.lineWidth=3;oc.beginPath();oc.arc(tx,ty,18,0,7);oc.stroke();
+  if(S.ok){const p=(now%1500)/1500;oc.globalAlpha=(1-p)*.8;oc.lineWidth=2;oc.beginPath();oc.arc(tx,ty,18+p*20,0,7);oc.stroke();oc.globalAlpha=1}
+  oc.fillStyle=col;oc.beginPath();oc.arc(sub.ax,sub.ay,8,0,7);oc.fill();
+  oc.strokeStyle='rgba(0,0,0,.35)';oc.lineWidth=1;oc.stroke();
+}
+function drawPeople(sub,now){
+  oc.clearRect(0,0,W,H);gridLines(false);
+  if(!sub||!S.target)return;
+  const col=S.ok?C.go:C.ink;
+  oc.setLineDash([6,6]);oc.lineWidth=1.5;oc.strokeStyle='rgba(244,245,246,.6)';
+  const tx=S.target.x*W,ty=S.target.y*H;
+  if(sub.group){line(tx,ty,W*.04,H);line(tx,ty,W*.96,H)}
+  oc.setLineDash([]);
+  if(sub.group){oc.strokeStyle='rgba(244,245,246,.45)';oc.lineWidth=1.5;for(const [a,b,c,e] of sub.people){oc.beginPath();oc.roundRect?oc.roundRect(a,b,c-a,e-b,8):oc.rect(a,b,c-a,e-b);oc.stroke()}}
+  corners(sub.x0,sub.y0,sub.x1,sub.y1,col);
+  targetMark(sub,now);
 }
 function drawLevel(t){
-  const cx=W/2,cy=Math.max(70,H*.14),L=Math.min(70,W*.18),ok=Math.abs(t.roll)<1.5&&(S.mode==='land'||Math.abs(t.pitch)<3);
-  oc.save();oc.lineCap='round';oc.lineWidth=2;oc.strokeStyle='rgba(255,255,255,.6)';
-  line(cx-L-16,cy,cx-L-4,cy);line(cx+L+4,cy,cx+L+16,cy);
-  oc.translate(cx,cy);oc.rotate(t.roll*Math.PI/180);oc.lineWidth=3;oc.strokeStyle=ok?C.gr:C.ye;line(-L,0,L,0);oc.restore();
-  oc.font='600 13px system-ui,sans-serif';oc.textAlign='center';oc.fillStyle=ok?C.gr:'#fff';
-  let s=`${Math.abs(t.roll).toFixed(1)}°`;if(S.mode==='arch')s+=` · ${t.pitch>0?'위로':'아래로'} ${Math.abs(t.pitch).toFixed(0)}°`;
-  oc.fillText(s,cx,cy+22);
+  const cx=W/2,cy=Math.max(56,H*.12),L=Math.min(64,W*.17),ok=Math.abs(t.roll)<1.5&&(S.mode==='land'||Math.abs(t.pitch)<3),col=ok?C.go:C.ink;
+  oc.save();oc.lineCap='round';oc.lineWidth=2;oc.strokeStyle='rgba(244,245,246,.5)';
+  line(cx-L-16,cy,cx-L-6,cy);line(cx+L+6,cy,cx+L+16,cy);
+  oc.translate(cx,cy);oc.rotate(t.roll*Math.PI/180);oc.lineWidth=2.5;oc.strokeStyle=col;line(-L,0,L,0);oc.restore();
+  oc.font='600 13px "Pretendard Variable",system-ui,sans-serif';oc.textAlign='center';oc.fillStyle=col;
+  oc.shadowColor='rgba(0,0,0,.5)';oc.shadowBlur=4;
+  oc.fillText(S.mode==='arch'?`${Math.abs(t.roll).toFixed(1)}°   ${t.pitch>0?'위':'아래'} ${Math.abs(t.pitch).toFixed(0)}°`:`${Math.abs(t.roll).toFixed(1)}°`,cx,cy+22);
+  oc.shadowBlur=0;
 }
 function drawScene(sub,t,now){
-  oc.clearRect(0,0,W,H);oc.setLineDash([]);
-  oc.lineWidth=1;oc.strokeStyle='rgba(255,255,255,.35)';
-  for(const f of [1/3,2/3])line(f*W,0,f*W,H);
-  const land=S.mode==='land',col=S.ok?C.gr:C.bl;
+  oc.clearRect(0,0,W,H);
+  const land=S.mode==='land',col=S.ok?C.go:C.ink;
+  gridLines(land);
   if(land){
-    for(const f of [1/3,2/3]){const on=S.target&&Math.abs(S.target.y-f)<.01;oc.lineWidth=on?4:1.5;oc.strokeStyle=on?C.or:'rgba(255,138,61,.45)';line(0,f*H,W,f*H)}
-    if(S.hz){const yc=S.hz.y*H,k=Math.tan(S.hz.ang*Math.PI/180);oc.lineWidth=2.5;oc.strokeStyle=col;oc.setLineDash([10,7]);line(0,yc-k*W/2,W,yc+k*W/2);oc.setLineDash([])}
-  }else{
-    for(const f of [1/3,2/3])line(0,f*H,W,f*H);
-    oc.setLineDash([7,6]);oc.lineWidth=2;oc.strokeStyle=C.or;line(W/2,0,W/2,H);oc.setLineDash([]);
-  }
-  if(sub&&S.target){
-    const tx=S.target.x*W,ty=S.target.y*H;
-    oc.strokeStyle=col;oc.lineWidth=3;oc.beginPath();oc.arc(tx,ty,17,0,7);oc.stroke();
-    if(S.ok){const p=(now%1400)/1400;oc.globalAlpha=1-p;oc.lineWidth=2;oc.beginPath();oc.arc(tx,ty,17+p*18,0,7);oc.stroke();oc.globalAlpha=1}
-    oc.fillStyle=col;oc.beginPath();oc.arc(sub.ax,sub.ay,9,0,7);oc.fill();
-  }
+    for(const f of [1/3,2/3]){const on=S.target&&Math.abs(S.target.y-f)<.01;oc.lineWidth=on?2.5:1;oc.strokeStyle=on?C.ink:C.dim;line(0,f*H,W,f*H)}
+    if(S.hz){const yc=S.hz.y*H,k=Math.tan(S.hz.ang*Math.PI/180);oc.lineWidth=2;oc.strokeStyle=col;oc.setLineDash([10,8]);line(0,yc-k*W/2,W,yc+k*W/2);oc.setLineDash([])}
+  }else{oc.setLineDash([6,6]);oc.lineWidth=1.5;oc.strokeStyle='rgba(244,245,246,.6)';line(W/2,0,W/2,H);oc.setLineDash([])}
+  if(sub&&S.target)targetMark(sub,now);
   if(t)drawLevel(t);
 }
 
-function status(m){$('#status').textContent=m}
-function setSrc(){
-  $('#empty').hidden=true;$('#srcTag').hidden=false;
-  $('#srcTag').textContent=S.src==='cam'?'실시간 카메라':'사진 체험 · 드래그로 이동';
-  $('#bAuto').hidden=S.src!=='photo';lastUI='';
+/* ---------- 메인 루프 ---------- */
+function frame(now){
+  requestAnimationFrame(frame);
+  if(!S.src)return;
+  const v=view();if(!v)return;
+  if(S.anim){const a=S.anim,p=clamp((now-a.t0)/450,0,1),e=1-(1-p)**3;
+    S.pan={x:a.from.x+(a.to.x-a.from.x)*e,y:a.from.y+(a.to.y-a.from.y)*e};if(p>=1)S.anim=null}
+  if(S.src==='cam'&&vid.readyState<2)return;
+  ctx.save();ctx.clearRect(0,0,W,H);
+  if(mirrored()){ctx.translate(W,0);ctx.scale(-1,1)}
+  ctx.drawImage(S.src==='cam'?vid:S.img,v.ox,v.oy,v.w*v.s,v.h*v.s);ctx.restore();
+  if(S.mode==='land'||S.mode==='arch'){const {sub,t}=sceneState(now);drawScene(sub,t,now);ui(sub);return}
+  if(S.src==='cam'&&S.det&&now-S.lastDet>90){
+    S.lastDet=now;try{const r=S.det.detectForVideo(vid,nextTs());S.dets=norm(r.detections,vid.videoWidth,vid.videoHeight)}catch(e){}
+  }
+  let sub=subject(v);
+  if(S.src==='cam')sub=stabilize(sub,now);
+  if(sub&&!S.target)pickTarget(sub);
+  if(sub&&S.target){
+    const d=Math.hypot((sub.ax-S.target.x*W)/W,(sub.ay-S.target.y*H)/H);
+    setOk(!S.recZoom&&(S.ok?d<.055:d<.035));
+    if(S.ok&&!S.evDone&&S.ev==null&&now-S.lastEv>400){S.lastEv=now;measureEv(sub)}
+  }else setOk(false);
+  drawPeople(sub,now);ui(sub);
+}
+requestAnimationFrame(frame);
+
+/* ---------- 피드백 ---------- */
+let snackT=0;
+function snack(m){const el=$('#snack');el.textContent=m;el.classList.add('on');clearTimeout(snackT);snackT=setTimeout(()=>el.classList.remove('on'),3200)}
+function haptic(kind){
+  if(!S.haptic&&!kind)return;
+  try{if(P.Haptics){P.Haptics.impact({style:kind==='light'?'LIGHT':'MEDIUM'});return}}catch(e){}
+  try{navigator.vibrate?.(kind==='light'?8:18)}catch(e){}
+}
+
+/* ---------- 카메라 ---------- */
+function showVfState(title,body,retry=true){
+  $('#vfState').hidden=!title;if(!title)return;
+  $('#vfTitle').textContent=title;$('#vfBody').textContent=body;$('#vfRetry').hidden=!retry;
 }
 function stopCam(){
-  const st=vid.srcObject;if(st)st.getTracks().forEach(t=>t.stop());vid.srcObject=null;S.track=null;S.hwZoom=false;
+  const st=vid.srcObject;if(st)st.getTracks().forEach(t=>t.stop());vid.srcObject=null;S.track=null;S.hwZoom=false;S.ic=null;
 }
 async function startCam(){
   enableSensors();
-  if(!navigator.mediaDevices?.getUserMedia){status('이 브라우저에서는 카메라를 쓸 수 없어요. HTTPS 주소로 열어주세요.');return}
+  if(!navigator.mediaDevices?.getUserMedia){showVfState('이 화면에서는 카메라를 쓸 수 없어요','앱으로 설치하거나 https 주소로 열어주세요. 지금은 사진으로 연습할 수 있어요.',false);return}
   try{
-    const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:960}},audio:false});
+    const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:S.facing},width:{ideal:1920},height:{ideal:1440}},audio:false});
     stopCam();vid.srcObject=st;await vid.play();
-    S.track=st.getVideoTracks()[0];S.src='cam';S.img=null;S.dets=[];S.zoom=1;reset();setSrc();
-  }catch(e){status('카메라를 열 수 없어요. 권한을 허용했는지, HTTPS 주소인지 확인해주세요.')}
+    S.track=st.getVideoTracks()[0];S.src='cam';S.img=null;S.dets=[];S.zoom=1;reset();setSrc();showVfState(null);
+  }catch(e){
+    const denied=e&&(e.name==='NotAllowedError'||e.name==='SecurityError');
+    showVfState(denied?'카메라 권한이 필요해요':'카메라를 열지 못했어요',
+      denied?(NATIVE?'설정 > 애플리케이션 > 프레임핏 > 권한에서 카메라를 허용한 뒤 다시 시도해 주세요.':'브라우저 주소창의 권한 설정에서 카메라를 허용해 주세요.'):'다른 앱이 카메라를 쓰고 있지 않은지 확인해 주세요.');
+    $('#gTitle').textContent='카메라가 꺼져 있어요';$('#gSub').textContent='';lastUI='';
+  }
+}
+function setSrc(){
+  const photo=S.src==='photo';
+  $('#bEndPractice').hidden=!photo;$('#bFlip').hidden=photo;$('#shutter').disabled=!S.src;lastUI='';
 }
 function pickPhoto(){$('#file').click()}
 $('#file').addEventListener('change',e=>{
   const f=e.target.files[0];if(!f)return;
   const img=new Image();
-  img.onload=()=>{stopCam();S.img=img;S.src='photo';S.zoom=1;S.center=true;S.dets=[];reset();setSrc();detectPhoto()};
+  img.onload=()=>{stopCam();S.img=img;S.src='photo';S.zoom=1;S.center=true;S.dets=[];reset();setSrc();showVfState(null);detectPhoto()};
   img.src=URL.createObjectURL(f);e.target.value='';
 });
-$('#eCam').addEventListener('click',startCam);$('#bCam').addEventListener('click',startCam);
-$('#ePhoto').addEventListener('click',pickPhoto);$('#bPhoto').addEventListener('click',pickPhoto);
-$('#bRe').addEventListener('click',()=>{if(S.src==='photo')S.zoom=1,S.center=true;reset();lastUI=''});
-$('#bAuto').addEventListener('click',()=>{
-  if(S.mode==='land'||S.mode==='arch'){
-    let to=null;
-    if(S.mode==='land'&&S.hz&&S.target)to={x:S.pan.x,y:S.pan.y+(S.target.y-S.hz.y)*H};
-    if(S.mode==='arch'&&S.bc!=null)to={x:S.pan.x+(.5-S.bc)*W,y:S.pan.y};
-    if(to)S.anim={t0:performance.now(),from:{...S.pan},to};
-    return;
-  }
-  const v=view();if(!v)return;const sub=subject(v);if(!sub||!S.target)return;
-  S.anim={t0:performance.now(),from:{...S.pan},to:{x:S.pan.x+(S.target.x*W-sub.ax),y:S.pan.y+(S.target.y*H-sub.ay)}};
-});
-for(const b of document.querySelectorAll('#mode button'))b.addEventListener('click',()=>{
-  document.querySelectorAll('#mode button').forEach(x=>x.classList.toggle('on',x===b));S.mode=b.dataset.m;reset();lastUI='';enableSensors();
+$('#bFlip').addEventListener('click',()=>{S.facing=S.facing==='environment'?'user':'environment';startCam()});
+$('#bEndPractice').addEventListener('click',startCam);
+$('#vfRetry').addEventListener('click',startCam);
+$('#vfPractice').addEventListener('click',pickPhoto);
+
+/* ---------- 모드 ---------- */
+for(const b of document.querySelectorAll('#modes button'))b.addEventListener('click',()=>{
+  if(S.mode===b.dataset.m)return;
+  document.querySelectorAll('#modes button').forEach(x=>x.setAttribute('aria-selected',x===b?'true':'false'));
+  S.mode=b.dataset.m;reset();enableSensors();
 });
 
+/* ---------- 사진 연습: 끌기 / 탭 ---------- */
 let drag=null;
 stage.addEventListener('pointerdown',e=>{
-  if(e.target.closest('button')||S.src!=='photo')return;
-  drag={x:e.clientX,y:e.clientY,px:S.pan.x,py:S.pan.y,moved:false};stage.setPointerCapture(e.pointerId);S.anim=null;
+  if(e.target.closest('button')||S.src!=='photo'||drag)return;
+  drag={id:e.pointerId,x:e.clientX,y:e.clientY,px:S.pan.x,py:S.pan.y,moved:false};stage.setPointerCapture(e.pointerId);S.anim=null;
 });
 stage.addEventListener('pointermove',e=>{
-  if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+  if(!drag||e.pointerId!==drag.id)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
   if(Math.hypot(dx,dy)>6)drag.moved=true;
   if(drag.moved)S.pan={x:drag.px+dx,y:drag.py+dy};
 });
 stage.addEventListener('pointerup',e=>{
-  if(drag&&!drag.moved){
+  if(!drag||e.pointerId!==drag.id)return;
+  if(!drag.moved&&S.mode!=='land'&&S.mode!=='arch'){
     const r=stage.getBoundingClientRect(),v=view();
     if(v){const nx=(e.clientX-r.left-v.ox)/(v.w*v.s),ny=(e.clientY-r.top-v.oy)/(v.h*v.s);
       const bw=.26*W/(v.w*v.s),bh=.46*H/(v.h*v.s);
-      S.dets=[{x:nx-bw/2,y:ny-bh*.32,w:bw,h:bh,cat:'person',score:1}];reset();status('탭한 위치를 피사체로 지정했어요.')}
+      S.dets=[{x:nx-bw/2,y:ny-bh*.32,w:bw,h:bh,cat:'person'}];reset();snack('탭한 곳을 주인공으로 정했어요')}
   }
   drag=null;
 });
 stage.addEventListener('pointercancel',()=>{drag=null});
 
-$('#shutter').addEventListener('click',()=>{
-  const c=document.createElement('canvas');c.width=cv.width;c.height=cv.height;const x=c.getContext('2d');x.drawImage(cv,0,0);
-  if(S.evFactor!==1){const d=x.getImageData(0,0,c.width,c.height),a=d.data,f=S.evFactor;
+/* ---------- 촬영 ---------- */
+function visibleRegion(v){
+  // 화면에 보이는 영역을 원본(영상 프레임) 좌표로
+  let x=-v.ox/v.s,y=-v.oy/v.s;const w=W/v.s,h=H/v.s;
+  if(mirrored())x=v.w-x-w;
+  return {x,y,w,h};
+}
+async function grabSource(v){
+  const reg=visibleRegion(v);
+  if(S.src==='photo')return {src:S.img,reg};
+  if('ImageCapture' in window&&S.track){
+    try{
+      S.ic=S.ic||new ImageCapture(S.track);
+      const bmp=await createImageBitmap(await S.ic.takePhoto());
+      const k=Math.max(bmp.width/v.w,bmp.height/v.h),offx=(bmp.width-v.w*k)/2,offy=(bmp.height-v.h*k)/2;
+      return {src:bmp,reg:{x:reg.x*k+offx,y:reg.y*k+offy,w:reg.w*k,h:reg.h*k}};
+    }catch(e){}
+  }
+  return {src:vid,reg};
+}
+async function capture(){
+  const v=view();if(!v)return;
+  $('#flash').classList.remove('on');void $('#flash').offsetWidth;$('#flash').classList.add('on');haptic('light');
+  const {src,reg}=await grabSource(v);
+  const scale=Math.min(1,4096/Math.max(reg.w,reg.h));
+  const c=document.createElement('canvas');c.width=Math.round(reg.w*scale);c.height=Math.round(reg.h*scale);
+  const x=c.getContext('2d');
+  const useFilter=S.evFactor!==1&&'filter' in x;
+  if(useFilter)x.filter=`brightness(${S.evFactor})`;
+  x.drawImage(src,reg.x,reg.y,reg.w,reg.h,0,0,c.width,c.height);
+  if(S.evFactor!==1&&!useFilter){const d=x.getImageData(0,0,c.width,c.height),a=d.data,f=S.evFactor;
     for(let i=0;i<a.length;i+=4){a[i]=Math.min(255,a[i]*f);a[i+1]=Math.min(255,a[i+1]*f);a[i+2]=Math.min(255,a[i+2]*f)}x.putImageData(d,0,0)}
-  const url=c.toDataURL('image/jpeg',.92);$('#shotImg').src=url;$('#shotDl').href=url;$('#shot').hidden=false;S.shot=true;
-});
-$('#shotClose').addEventListener('click',()=>{$('#shot').hidden=true});
-// 앱(안드로이드)에서는 다운로드 대신 파일 저장 후 공유 시트로 넘김
-$('#shotDl').addEventListener('click',async e=>{
-  const P=window.Capacitor?.Plugins;if(!P?.Filesystem||!P?.Share)return;
-  e.preventDefault();
-  try{
-    const r=await P.Filesystem.writeFile({path:`gudo_${Date.now()}.jpg`,data:$('#shotImg').src.split(',')[1],directory:'CACHE'});
-    await P.Share.share({title:'구도 사진',files:[r.uri]});
-  }catch(err){status('저장에 실패했어요. 사진을 길게 눌러 저장해 주세요.')}
-});
+  const dataUrl=c.toDataURL('image/jpeg',.92);
+  const blob=await (await fetch(dataUrl)).blob();
+  if(S.shot?.url)URL.revokeObjectURL(S.shot.url);
+  S.shot={dataUrl,blob,url:URL.createObjectURL(blob),name:`FrameFit_${new Date().toISOString().replace(/[-:T]/g,'').slice(0,14)}.jpg`,saved:false};
+  const ti=$('#thumbImg');ti.src=S.shot.url;ti.hidden=false;ti.classList.remove('pop');void ti.offsetWidth;ti.classList.add('pop');
+  $('#bThumb').querySelector('svg').style.display='none';
+  if(NATIVE){const ok=await saveToGallery();snack(ok?'갤러리에 저장했어요':'저장하지 못했어요. 사진을 눌러 공유로 저장해 주세요')}
+}
+$('#shutter').addEventListener('click',capture);
 
+let albumPath=null;
+async function saveToGallery(){
+  const sh=S.shot;if(!sh)return false;
+  const M=P.Media;
+  if(M){
+    try{
+      if(albumPath==null){
+        try{const r=await M.getAlbumsPath();albumPath=r.path+'/FrameFit';try{await M.createAlbum({name:'FrameFit'})}catch(e){}}catch(e){albumPath=''}
+      }
+      const opt={path:sh.dataUrl,fileName:sh.name.replace('.jpg','')};if(albumPath)opt.albumIdentifier=albumPath;
+      await M.savePhoto(opt);sh.saved=true;return true;
+    }catch(e){}
+    try{
+      const r=await P.Filesystem.writeFile({path:sh.name,data:sh.dataUrl.split(',')[1],directory:'CACHE'});
+      const opt={path:r.uri,fileName:sh.name.replace('.jpg','')};if(albumPath)opt.albumIdentifier=albumPath;
+      await M.savePhoto(opt);sh.saved=true;return true;
+    }catch(e){}
+  }
+  return false;
+}
+async function sharePhoto(){
+  const sh=S.shot;if(!sh)return;
+  try{
+    if(NATIVE&&P.Filesystem&&P.Share){
+      const r=await P.Filesystem.writeFile({path:sh.name,data:sh.dataUrl.split(',')[1],directory:'CACHE'});
+      await P.Share.share({files:[r.uri]});return;
+    }
+    const file=new File([sh.blob],sh.name,{type:'image/jpeg'});
+    if(navigator.canShare?.({files:[file]})){await navigator.share({files:[file]});return}
+    snack('이 브라우저는 공유를 지원하지 않아요. 저장을 눌러주세요');
+  }catch(e){if(e?.name!=='AbortError')snack('공유하지 못했어요')}
+}
+async function savePhoto(){
+  const sh=S.shot;if(!sh)return;
+  if(NATIVE){if(sh.saved){snack('이미 갤러리에 저장돼 있어요');return}snack(await saveToGallery()?'갤러리에 저장했어요':'저장하지 못했어요. 공유로 저장해 주세요');return}
+  const a=document.createElement('a');a.href=sh.url;a.download=sh.name;document.body.append(a);a.click();a.remove();
+}
+
+/* ---------- 사진 보기 ---------- */
+function openReview(){
+  if(!S.shot){snack('아직 찍은 사진이 없어요');return}
+  $('#rvImg').src=S.shot.url;$('#rvSave').textContent=NATIVE&&S.shot.saved?'저장됨':'저장';
+  const r=$('#review');r.hidden=false;requestAnimationFrame(()=>r.classList.add('on'));
+}
+function closeReview(){const r=$('#review');r.classList.remove('on');setTimeout(()=>{r.hidden=true},200)}
+$('#bThumb').addEventListener('click',openReview);
+$('#rvClose').addEventListener('click',closeReview);
+$('#rvShare').addEventListener('click',sharePhoto);
+$('#rvSave').addEventListener('click',async()=>{await savePhoto();if(NATIVE&&S.shot?.saved)$('#rvSave').textContent='저장됨'});
+
+/* ---------- 설정 ---------- */
+const sheet=$('#settings');
+function syncSwitches(){$('#swGrid').setAttribute('aria-checked',S.grid);$('#swHaptic').setAttribute('aria-checked',S.haptic);$('#bGrid').setAttribute('aria-pressed',S.grid)}
+syncSwitches();
+$('#bSettings').addEventListener('click',()=>sheet.showModal());
+sheet.addEventListener('click',e=>{if(e.target===sheet)sheet.close()});
+$('#swGrid').addEventListener('click',()=>{S.grid=!S.grid;store.set('grid',S.grid);syncSwitches()});
+$('#bGrid').addEventListener('click',()=>{S.grid=!S.grid;store.set('grid',S.grid);syncSwitches()});
+$('#swHaptic').addEventListener('click',()=>{S.haptic=!S.haptic;store.set('haptic',S.haptic);syncSwitches();if(S.haptic)haptic()});
+$('#rowPractice').addEventListener('click',()=>{sheet.close();pickPhoto()});
+
+/* ---------- 시작 화면 ---------- */
+const ob=$('#onboard');
+function finishOnboard(){store.set('onboarded',true);ob.hidden=true}
+$('#obStart').addEventListener('click',()=>{finishOnboard();startCam()});
+$('#obPractice').addEventListener('click',()=>{finishOnboard();pickPhoto()});
+if(store.get('onboarded',false))startCam();else ob.hidden=false;
+
+/* ---------- 안드로이드 연동 ---------- */
+if(NATIVE){
+  try{P.StatusBar?.setStyle({style:'DARK'});P.StatusBar?.setBackgroundColor?.({color:'#000000'})}catch(e){}
+  P.App?.addListener('backButton',()=>{
+    if(!$('#review').hidden)closeReview();
+    else if(sheet.open)sheet.close();
+    else if(S.src==='photo')startCam();
+    else P.App.exitApp();
+  });
+  P.App?.addListener('appStateChange',({isActive})=>{if(!isActive){if(S.src==='cam')stopCam()}else if(S.src==='cam'&&!S.track)startCam()});
+}else{
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){if(S.src==='cam')stopCam()}else if(S.src==='cam'&&!S.track)startCam()});
+}
+
+/* ---------- 인식 모델 (앱에서는 내장본, 웹에서는 CDN) ---------- */
 const V='0.10.14',CDN=`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${V}`;
+const REMOTE_MODEL='https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite';
+async function loadDetector(base,model){
+  const m=await import(`${base}/vision_bundle.mjs`);
+  const fs=await m.FilesetResolver.forVisionTasks(`${base}/wasm`);
+  const mk=d=>m.ObjectDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:model,delegate:d},scoreThreshold:.45,maxResults:6,runningMode:'VIDEO'});
+  try{return await mk('GPU')}catch(e){return await mk('CPU')}
+}
 (async()=>{
   try{
-    const m=await import(`${CDN}/vision_bundle.mjs`);
-    const fs=await m.FilesetResolver.forVisionTasks(`${CDN}/wasm`);
-    const mk=d=>m.ObjectDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite',delegate:d},scoreThreshold:.45,maxResults:6,runningMode:'VIDEO'});
-    try{S.det=await mk('GPU')}catch(e){S.det=await mk('CPU')}
-    status('');if(S.pending&&S.img)detectPhoto();
-  }catch(e){status('인식 모델을 못 불러왔어요. 사진 모드에서 피사체를 탭해 지정할 수 있어요.')}
+    if(NATIVE){try{S.det=await loadDetector(new URL('vendor/mediapipe',location.href).href.replace(/\/$/,''),'models/efficientdet_lite0.tflite')}catch(e){}}
+    if(!S.det)S.det=await loadDetector(CDN,REMOTE_MODEL);
+    if(S.pending&&S.img)detectPhoto();
+  }catch(e){snack('인식 기능을 불러오지 못했어요. 인터넷 연결을 확인해 주세요')}
   S.loading=false;lastUI='';
 })();
 }
