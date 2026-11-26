@@ -98,7 +98,7 @@ svg{display:block}
 #shutter:disabled{opacity:.35}
 
 /* 스낵바 */
-#snack{position:fixed;left:16px;right:16px;bottom:calc(var(--sb) + 124px);margin:auto;max-width:420px;background:#2c2e31;color:var(--ink);border-radius:10px;padding:13px 16px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity 200ms ease,transform 300ms var(--ease-out);z-index:30}
+#snack{position:fixed;left:16px;right:16px;bottom:calc(var(--sb) + 252px);margin:auto;max-width:420px;background:#2c2e31;color:var(--ink);border-radius:10px;padding:13px 16px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity 200ms ease,transform 300ms var(--ease-out);z-index:30}
 #snack.on{opacity:1;transform:none}
 
 /* 시작 화면 */
@@ -164,6 +164,7 @@ svg{display:block}
     <div class="top-mid">
       <span class="chip" id="chipZoom" hidden></span>
       <span class="chip" id="chipEv" hidden></span>
+      <button class="chip btn" id="bUnpin" hidden>선택 해제</button>
       <button class="chip btn" id="bEndPractice" hidden>연습 끝내기</button>
     </div>
     <button class="icon-btn" id="bGrid" aria-pressed="true" aria-label="격자선">
@@ -331,7 +332,38 @@ function boxToStage(b,v){
   const [ax,ay]=toStage(b.x,b.y,v),[bx,by]=toStage(b.x+b.w,b.y+b.h,v);
   return [Math.min(ax,bx),Math.min(ay,by),Math.max(ax,bx),Math.max(ay,by)];
 }
-function subject(v){
+const selfie=()=>S.src==='cam'&&S.facing==='user';
+function pinSubject(v,now){
+  const p=S.pin;
+  if(p.kind==='track'){
+    const s=.11*W;return {x0:p.x-s,y0:p.y-s,x1:p.x+s,y1:p.y+s,ax:p.x,ay:p.y,person:false,group:false,people:[]};
+  }
+  // 탭한 인식 대상을 계속 따라감
+  if(S.src==='cam'&&S.dets.length){
+    const best=S.dets.map(d=>[iou(d,p.box),d]).sort((a,b)=>b[0]-a[0])[0];
+    if(best&&best[0]>.2){p.box=best[1];p.seen=now}
+  }
+  if(S.src==='cam'&&now-p.seen>1500){S.pin=null;snack('선택한 대상을 놓쳤어요. 다시 탭해 주세요');return null}
+  return toSub(p.box,v,false);
+}
+function toSub(box,v,group,people){
+  const [x0,y0,x1,y1]=boxToStage(box,v);
+  let ax=(x0+x1)/2,ay=(y0+y1)/2;
+  if(box.cat==='face'){[ax,ay]=toStage(box.ex,box.ey,v)}
+  else if(box.cat==='person')ay=y0+(y1-y0)*(group?.22:.32);
+  return {x0,y0,x1,y1,ax,ay,person:box.cat==='person'||box.cat==='face',group,people:people||[]};
+}
+function subject(v,now){
+  if(S.pin)return pinSubject(v,now);
+  if(selfie()&&S.dets.length&&S.dets[0].cat==='face'){
+    const fs=S.dets;
+    if(S.mode==='group'&&fs.length>1){
+      const u=union(fs);u.cat='face';u.ex=fs.reduce((a,f)=>a+f.ex,0)/fs.length;u.ey=fs.reduce((a,f)=>a+f.ey,0)/fs.length;
+      return toSub(u,v,true,fs.map(d=>boxToStage(d,v)));
+    }
+    const f=S.prevBox?fs.map(d=>[iou(d,S.prevBox),d]).sort((a,b)=>b[0]-a[0])[0][1]:fs.reduce((a,b)=>a.w*a.h>b.w*b.h?a:b);
+    S.prevBox=f;return toSub(f,v,false);
+  }
   const ps=S.dets.filter(d=>d.cat==='person');
   const list=ps.length?ps:S.dets;if(!list.length)return null;
   const group=S.mode==='group'&&ps.length>0;
@@ -355,8 +387,14 @@ function stabilize(sub,now){
   p.people=sub.people;p.person=sub.person;p.group=sub.group;S.sm.seen=now;return p;
 }
 function pickTarget(sub){
+  if(selfie()&&!S.pin){
+    // 셀카: 눈높이는 위쪽 1/3선, 가로는 가장 가까운 1/3·가운데
+    const xs=[1/3,.5,2/3],cx=sub.ax/W;
+    S.target={x:sub.group?.5:xs.reduce((a,b)=>Math.abs(b-cx)<Math.abs(a-cx)?b:a),y:1/3};S.zoomDone=true;return;
+  }
   if(sub.group)S.target={x:.5,y:1/3};
   else S.target={x:sub.ax/W<.5?1/3:2/3,y:sub.ay/H<.5?1/3:2/3};
+  if(S.pin&&(S.pin.kind==='track'||S.pin.box.cat==='pick'))S.zoomDone=true;
   if(!S.zoomDone){
     const ratio=(sub.y1-sub.y0)/H,want=sub.group?.6:.5;
     const rec=clamp(Math.round(S.zoom*want/Math.max(ratio,.05)*2)/2,1,3);
@@ -365,7 +403,9 @@ function pickTarget(sub){
 }
 
 /* ---------- 상태 초기화 / 줌 / 노출 ---------- */
+function resetGuide(){S.target=null;S.ok=false;S.sm=null;S.prevBox=null;S.recZoom=null;lastUI=''}
 function reset(){
+  S.pin=null;S.tapFx=null;const ub=document.querySelector('#bUnpin');if(ub)ub.hidden=true;
   S.target=null;S.ok=false;S.sm=null;S.prevBox=null;S.recZoom=null;S.zoomDone=false;S.hz=null;S.bc=null;S.scene=null;
   S.ev=null;S.evDone=false;S.evApplied=0;S.evFactor=1;cv.style.filter='';
   if(S.track){const c=S.track.getCapabilities?.()||{};if(c.exposureCompensation)S.track.applyConstraints({advanced:[{exposureCompensation:0}]}).catch(()=>{})}
@@ -412,7 +452,68 @@ function measureEv(sub){
 function norm(dets,w,h){
   return dets.map(d=>({x:d.boundingBox.originX/w,y:d.boundingBox.originY/h,w:d.boundingBox.width/w,h:d.boundingBox.height/h,cat:d.categories?.[0]?.categoryName||''}));
 }
+function normFaces(dets,w,h){
+  return dets.map(d=>{const b=d.boundingBox,k=d.keypoints||[];
+    const two=k.length>1;
+    return {x:b.originX/w,y:b.originY/h,w:b.width/w,h:b.height/h,cat:'face',
+      ex:two?(k[0].x+k[1].x)/2:(b.originX+b.width/2)/w,ey:two?(k[0].y+k[1].y)/2:(b.originY+b.height*.4)/h}});
+}
 function nextTs(){S.lastTs=Math.max(performance.now(),S.lastTs+1);return S.lastTs}
+
+/* ---------- 탭한 지점 따라가기 (건물·물건 등 인식 목록에 없는 대상) ---------- */
+const TW=120,TH=160,TR=9,SR=12;
+const tcv=document.createElement('canvas');tcv.width=TW;tcv.height=TH;
+const tcx=tcv.getContext('2d',{willReadFrequently:true});
+function grayFrame(){
+  tcx.drawImage(cv,0,0,TW,TH);const d=tcx.getImageData(0,0,TW,TH).data,g=new Float32Array(TW*TH);
+  for(let i=0;i<g.length;i++)g[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];return g;
+}
+function patch(g,cx,cy){
+  const n=2*TR+1,p=new Float32Array(n*n);let m=0;
+  for(let y=-TR;y<=TR;y++)for(let x=-TR;x<=TR;x++){const v=g[(cy+y)*TW+cx+x];p[(y+TR)*n+x+TR]=v;m+=v}
+  m/=n*n;for(let i=0;i<p.length;i++)p[i]-=m;return p;
+}
+const clampC=(cx,cy)=>[clamp(cx,TR,TW-TR-1),clamp(cy,TR,TH-TR-1)];
+function startTrack(px,py,now){
+  const g=grayFrame(),[cx,cy]=clampC(Math.round(px/W*TW),Math.round(py/H*TH));
+  const tpl=patch(g,cx,cy);let v=0;for(const t of tpl)v+=t*t;
+  // 무늬가 거의 없는 곳은 따라갈 단서가 없으니 화면 위 고정점으로 둠
+  S.pin={kind:'track',cx,cy,x:px,y:py,tpl,seen:now,flat:Math.sqrt(v/tpl.length)<7};
+}
+function updateTrack(now){
+  const p=S.pin;if(p.flat){p.seen=now;return}
+  const g=grayFrame(),n=2*TR+1,N=(TR+1)**2;
+  const cost=(cx,cy)=>{let m=0;for(let y=-TR;y<=TR;y+=2)for(let x=-TR;x<=TR;x+=2)m+=g[(cy+y)*TW+cx+x];
+    m/=N;let e=0;for(let y=-TR;y<=TR;y+=2)for(let x=-TR;x<=TR;x+=2)e+=Math.abs(g[(cy+y)*TW+cx+x]-m-p.tpl[(y+TR)*n+x+TR]);return e/N};
+  const stay=cost(p.cx,p.cy);let best=stay,bx=p.cx,by=p.cy;
+  for(let dy=-SR;dy<=SR;dy++)for(let dx=-SR;dx<=SR;dx++){
+    if(!dx&&!dy)continue;
+    const [cx,cy]=clampC(p.cx+dx,p.cy+dy);if(cx!==p.cx+dx||cy!==p.cy+dy)continue;
+    const e=cost(cx,cy);if(e<best){best=e;bx=cx;by=cy}
+  }
+  // 제자리보다 확실히 나을 때만 움직여서 흘러가는 것을 막음
+  if(best>stay*.85){bx=p.cx;by=p.cy;best=stay}
+  const err=best;
+  if(err<24){
+    p.cx=bx;p.cy=by;p.seen=now;
+    const tx=(bx+.5)/TW*W,ty=(by+.5)/TH*H;p.x+=(tx-p.x)*.5;p.y+=(ty-p.y)*.5;
+    if(err<14){const fresh=patch(g,bx,by);for(let i=0;i<p.tpl.length;i++)p.tpl[i]=p.tpl[i]*.9+fresh[i]*.1}
+  }else if(now-p.seen>1200){S.pin=null;snack('선택한 대상을 놓쳤어요. 다시 탭해 주세요')}
+}
+function selectAt(px,py,now){
+  const v=view();if(!v)return;
+  S.tapFx={x:px,y:py,t:now};
+  const hits=S.dets.map(d=>[d,boxToStage(d,v)]).filter(([,b])=>px>=b[0]&&px<=b[2]&&py>=b[1]&&py<=b[3])
+    .sort((a,b)=>(a[1][2]-a[1][0])*(a[1][3]-a[1][1])-(b[1][2]-b[1][0])*(b[1][3]-b[1][1]));
+  resetGuide();
+  if(hits.length){S.pin={kind:'det',box:hits[0][0],seen:now};snack(hits[0][0].cat==='face'?'이 얼굴을 기준으로 맞출게요':'이 대상을 기준으로 맞출게요')}
+  else if(S.src==='photo'){
+    let nx=(px-v.ox)/(v.w*v.s);const ny=(py-v.oy)/(v.h*v.s),bw=.22*W/(v.w*v.s),bh=.22*H/(v.h*v.s);
+    S.pin={kind:'det',box:{x:nx-bw/2,y:ny-bh/2,w:bw,h:bh,cat:'pick'},seen:now};snack('탭한 곳을 기준으로 맞출게요');
+  }else{startTrack(px,py,now);snack('탭한 곳을 따라가며 맞출게요')}
+  $('#bUnpin').hidden=false;
+}
+function clearPin(){S.pin=null;$('#bUnpin').hidden=true;resetGuide()}
 function detectPhoto(){
   if(!S.det){S.pending=true;return}
   S.pending=false;
@@ -501,6 +602,11 @@ function dirText(sub){
     return cam?`${right?'오른쪽':'왼쪽'}으로 돌려 건물을 가운데에 두세요`:`사진을 ${right?'왼쪽':'오른쪽'}으로 끌어주세요`;
   }
   const dx=(sub.ax-S.target.x*W)/W,dy=(sub.ay-S.target.y*H)/H;
+  if(selfie()){
+    const h=Math.abs(dx)>.025?(dx>0?'휴대폰을 오른쪽으로 옮겨주세요':'휴대폰을 왼쪽으로 옮겨주세요'):'';
+    const vv=Math.abs(dy)>.025?(dy>0?'휴대폰을 조금 내려주세요':'휴대폰을 조금 올려주세요'):'';
+    return (Math.abs(dx)>=Math.abs(dy)?h:vv)||h||vv;
+  }
   const hx=Math.abs(dx)>.025?(cam?(dx>0?'오른쪽으로 돌려주세요':'왼쪽으로 돌려주세요'):(dx>0?'왼쪽으로 끌어주세요':'오른쪽으로 끌어주세요')):'';
   const vy=Math.abs(dy)>.025?(cam?(dy>0?'아래로 기울여주세요':'위로 들어주세요'):(dy>0?'위로 끌어주세요':'아래로 끌어주세요')):'';
   const first=Math.abs(dx)>=Math.abs(dy)?hx:vy;
@@ -517,11 +623,11 @@ function ui(sub){
   let t,s='',go=false,c=null;
   const scene=S.mode==='land'||S.mode==='arch';
   if(!sub){
-    if(scene){t=S.mode==='land'?'수평선을 찾고 있어요':'건물을 찾고 있어요';s=S.mode==='land'?'하늘과 땅의 경계가 보이게 담아주세요':'건물 정면이 보이게 담아주세요'}
-    else{t=S.loading?'인식을 준비하고 있어요':'찍을 대상을 찾고 있어요';s=S.src==='photo'?'주인공을 탭하면 직접 지정할 수 있어요':'사람이나 물건을 화면에 담아주세요'}
+    if(scene){t=S.mode==='land'?'수평선을 찾고 있어요':'건물을 찾고 있어요';s=S.mode==='land'?'하늘과 땅의 경계가 보이게 담거나, 기준으로 삼을 곳을 탭하세요':'건물 정면을 담거나, 맞추고 싶은 건물을 탭하세요'}
+    else{t=S.loading?'인식을 준비하고 있어요':selfie()?'얼굴을 찾고 있어요':'찍을 대상을 찾고 있어요';s=selfie()?'얼굴이 화면에 보이게 들어주세요':'찍고 싶은 대상을 탭해서 고를 수도 있어요'}
   }
   else if(S.recZoom){t=`${S.recZoom}배로 당기면 더 좋아요`;s='대상이 화면에 비해 작아요';c=['zoom',`${S.recZoom}× 적용`]}
-  else if(!S.ok){t=S.mode==='land'?'수평선을 흰 선에 맞춰주세요':S.mode==='arch'?'건물을 반듯하게 맞춰주세요':'점을 원 안에 넣어주세요';s=dirText(sub)}
+  else if(!S.ok){t=S.pin?'고른 대상을 원 안에 넣어주세요':S.mode==='land'?'수평선을 흰 선에 맞춰주세요':S.mode==='arch'?'건물을 반듯하게 맞춰주세요':selfie()?'눈높이 점을 원 안에 넣어주세요':'점을 원 안에 넣어주세요';s=dirText(sub)}
   else if(!S.evDone){go=true;t='구도가 맞았어요';
     if(S.ev==null)s='밝기를 확인하고 있어요';else{s=S.ev>0?'조금 어두워요. 밝기를 올릴까요?':'조금 밝아요. 밝기를 내릴까요?';c=['ev',`밝기 ${S.ev>0?'+':''}${S.ev}`]}}
   else{go=true;t='지금 찍으세요';s=S.src==='photo'?'셔터를 누르면 이 구도로 잘라 저장해요':'초록색일 때 셔터를 누르세요'}
@@ -556,8 +662,13 @@ function targetMark(sub,now){
   oc.fillStyle=col;oc.beginPath();oc.arc(sub.ax,sub.ay,8,0,7);oc.fill();
   oc.strokeStyle='rgba(0,0,0,.35)';oc.lineWidth=1;oc.stroke();
 }
+function drawTap(now){
+  const f=S.tapFx;if(!f)return;const p=(now-f.t)/420;if(p>=1){S.tapFx=null;return}
+  oc.setLineDash([]);oc.globalAlpha=1-p;oc.strokeStyle=C.ink;oc.lineWidth=2;
+  oc.beginPath();oc.arc(f.x,f.y,30-12*(1-(1-p)**3),0,7);oc.stroke();oc.globalAlpha=1;
+}
 function drawPeople(sub,now){
-  oc.clearRect(0,0,W,H);gridLines(false);
+  oc.clearRect(0,0,W,H);gridLines(false);drawTap(now);
   if(!sub||!S.target)return;
   const col=S.ok?C.go:C.ink;
   oc.setLineDash([6,6]);oc.lineWidth=1.5;oc.strokeStyle='rgba(244,245,246,.6)';
@@ -601,11 +712,14 @@ function frame(now){
   ctx.save();ctx.clearRect(0,0,W,H);
   if(mirrored()){ctx.translate(W,0);ctx.scale(-1,1)}
   ctx.drawImage(S.src==='cam'?vid:S.img,v.ox,v.oy,v.w*v.s,v.h*v.s);ctx.restore();
-  if(S.mode==='land'||S.mode==='arch'){const {sub,t}=sceneState(now);drawScene(sub,t,now);ui(sub);return}
-  if(S.src==='cam'&&S.det&&now-S.lastDet>90){
-    S.lastDet=now;try{const r=S.det.detectForVideo(vid,nextTs());S.dets=norm(r.detections,vid.videoWidth,vid.videoHeight)}catch(e){}
+  const scene=S.mode==='land'||S.mode==='arch';
+  if(scene&&!S.pin){const {sub,t}=sceneState(now);drawScene(sub,t,now);drawTap(now);ui(sub);return}
+  if(S.src==='cam'&&now-S.lastDet>90){
+    const face=selfie()&&S.face&&!(S.pin&&S.pin.kind==='track'),det=face?S.face:S.det;
+    if(det&&!(S.pin&&S.pin.kind==='track')){S.lastDet=now;try{const r=det.detectForVideo(vid,nextTs());S.dets=face?normFaces(r.detections,vid.videoWidth,vid.videoHeight):norm(r.detections,vid.videoWidth,vid.videoHeight)}catch(e){}}
   }
-  let sub=subject(v);
+  if(S.pin&&S.pin.kind==='track')updateTrack(now);
+  let sub=subject(v,now);
   if(S.src==='cam')sub=stabilize(sub,now);
   if(sub&&!S.target)pickTarget(sub);
   if(sub&&S.target){
@@ -613,7 +727,9 @@ function frame(now){
     setOk(!S.recZoom&&(S.ok?d<.055:d<.035));
     if(S.ok&&!S.evDone&&S.ev==null&&now-S.lastEv>400){S.lastEv=now;measureEv(sub)}
   }else setOk(false);
-  drawPeople(sub,now);ui(sub);
+  drawPeople(sub,now);
+  if(scene){const t=tiltNow(now);if(t)drawLevel(t)}
+  ui(sub);
 }
 requestAnimationFrame(frame);
 
@@ -661,6 +777,7 @@ $('#file').addEventListener('change',e=>{
 });
 $('#bFlip').addEventListener('click',()=>{S.facing=S.facing==='environment'?'user':'environment';startCam()});
 $('#bEndPractice').addEventListener('click',startCam);
+$('#bUnpin').addEventListener('click',clearPin);
 $('#vfRetry').addEventListener('click',startCam);
 $('#vfPractice').addEventListener('click',pickPhoto);
 
@@ -674,22 +791,17 @@ for(const b of document.querySelectorAll('#modes button'))b.addEventListener('cl
 /* ---------- 사진 연습: 끌기 / 탭 ---------- */
 let drag=null;
 stage.addEventListener('pointerdown',e=>{
-  if(e.target.closest('button')||S.src!=='photo'||drag)return;
+  if(e.target.closest('button')||!S.src||drag)return;
   drag={id:e.pointerId,x:e.clientX,y:e.clientY,px:S.pan.x,py:S.pan.y,moved:false};stage.setPointerCapture(e.pointerId);S.anim=null;
 });
 stage.addEventListener('pointermove',e=>{
   if(!drag||e.pointerId!==drag.id)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
   if(Math.hypot(dx,dy)>6)drag.moved=true;
-  if(drag.moved)S.pan={x:drag.px+dx,y:drag.py+dy};
+  if(drag.moved&&S.src==='photo'){S.pan={x:drag.px+dx,y:drag.py+dy};if(S.pin&&S.pin.kind==='track')S.pin=null}
 });
 stage.addEventListener('pointerup',e=>{
   if(!drag||e.pointerId!==drag.id)return;
-  if(!drag.moved&&S.mode!=='land'&&S.mode!=='arch'){
-    const r=stage.getBoundingClientRect(),v=view();
-    if(v){const nx=(e.clientX-r.left-v.ox)/(v.w*v.s),ny=(e.clientY-r.top-v.oy)/(v.h*v.s);
-      const bw=.26*W/(v.w*v.s),bh=.46*H/(v.h*v.s);
-      S.dets=[{x:nx-bw/2,y:ny-bh*.32,w:bw,h:bh,cat:'person'}];reset();snack('탭한 곳을 주인공으로 정했어요')}
-  }
+  if(!drag.moved){const r=stage.getBoundingClientRect();selectAt(e.clientX-r.left,e.clientY-r.top,performance.now())}
   drag=null;
 });
 stage.addEventListener('pointercancel',()=>{drag=null});
@@ -821,16 +933,20 @@ if(NATIVE){
 /* ---------- 인식 모델 (앱에서는 내장본, 웹에서는 CDN) ---------- */
 const V='0.10.14',CDN=`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${V}`;
 const REMOTE_MODEL='https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite';
-async function loadDetector(base,model){
+const REMOTE_FACE='https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
+async function loadDetector(base,model,faceModel){
   const m=await import(`${base}/vision_bundle.mjs`);
   const fs=await m.FilesetResolver.forVisionTasks(`${base}/wasm`);
   const mk=d=>m.ObjectDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:model,delegate:d},scoreThreshold:.45,maxResults:6,runningMode:'VIDEO'});
-  try{return await mk('GPU')}catch(e){return await mk('CPU')}
+  let det;try{det=await mk('GPU')}catch(e){det=await mk('CPU')}
+  const mf=d=>m.FaceDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:faceModel,delegate:d},minDetectionConfidence:.5,runningMode:'VIDEO'});
+  mf('GPU').catch(()=>mf('CPU')).then(f=>{S.face=f}).catch(()=>{});
+  return det;
 }
 (async()=>{
   try{
-    if(NATIVE){try{S.det=await loadDetector(new URL('vendor/mediapipe',location.href).href.replace(/\/$/,''),'models/efficientdet_lite0.tflite')}catch(e){}}
-    if(!S.det)S.det=await loadDetector(CDN,REMOTE_MODEL);
+    if(NATIVE){try{S.det=await loadDetector(new URL('vendor/mediapipe',location.href).href.replace(/\/$/,''),'models/efficientdet_lite0.tflite','models/blaze_face_short_range.tflite')}catch(e){}}
+    if(!S.det)S.det=await loadDetector(CDN,REMOTE_MODEL,REMOTE_FACE);
     if(S.pending&&S.img)detectPhoto();
   }catch(e){snack('인식 기능을 불러오지 못했어요. 인터넷 연결을 확인해 주세요')}
   S.loading=false;lastUI='';
