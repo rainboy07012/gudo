@@ -23,7 +23,8 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: android-actions/setup-android@v3
+      - name: 안드로이드 SDK 라이선스 동의
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: 의존성 설치
         run: npm install
