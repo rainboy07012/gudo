@@ -3,7 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>구도 가이드 프로토타입</title>
+<title>구도 가이드</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0d0d0f">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="구도">
 <style>
 :root{--bg:#0d0d0f;--panel:#17171b;--line:#2a2a30;--ink:#f3f3f5;--dim:#9a9aa3;--or:#ff8a3d;--bl:#3aa8ff;--gr:#3ddc6f;--ye:#e8b53a}
 *{box-sizing:border-box;margin:0;min-width:0}
@@ -515,6 +521,15 @@ $('#shutter').addEventListener('click',()=>{
   const url=c.toDataURL('image/jpeg',.92);$('#shotImg').src=url;$('#shotDl').href=url;$('#shot').hidden=false;S.shot=true;
 });
 $('#shotClose').addEventListener('click',()=>{$('#shot').hidden=true});
+// 앱(안드로이드)에서는 다운로드 대신 파일 저장 후 공유 시트로 넘김
+$('#shotDl').addEventListener('click',async e=>{
+  const P=window.Capacitor?.Plugins;if(!P?.Filesystem||!P?.Share)return;
+  e.preventDefault();
+  try{
+    const r=await P.Filesystem.writeFile({path:`gudo_${Date.now()}.jpg`,data:$('#shotImg').src.split(',')[1],directory:'CACHE'});
+    await P.Share.share({title:'구도 사진',files:[r.uri]});
+  }catch(err){status('저장에 실패했어요. 사진을 길게 눌러 저장해 주세요.')}
+});
 
 const V='0.10.14',CDN=`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${V}`;
 (async()=>{
@@ -528,6 +543,9 @@ const V='0.10.14',CDN=`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${V}
   S.loading=false;lastUI='';
 })();
 }
+</script>
+<script>
+if('serviceWorker' in navigator&&location.protocol==='https:'&&!window.Capacitor){navigator.serviceWorker.register('sw.js').catch(()=>{})}
 </script>
 </body>
 </html>

@@ -1,0 +1,19 @@
+{
+  "name": "gudo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "구도 가이드 카메라 앱",
+  "scripts": {
+    "prepare-web": "rm -rf www && mkdir -p www && cp -r index.html manifest.webmanifest icons www/"
+  },
+  "dependencies": {
+    "@capacitor/android": "latest",
+    "@capacitor/core": "latest",
+    "@capacitor/filesystem": "latest",
+    "@capacitor/share": "latest"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "latest",
+    "@capacitor/assets": "latest"
+  }
+}

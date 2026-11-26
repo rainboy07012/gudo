@@ -1,0 +1,6 @@
+{
+  "appId": "io.github.rainboy07012.gudo",
+  "appName": "구도",
+  "webDir": "www",
+  "android": { "backgroundColor": "#0d0d0f" }
+}
