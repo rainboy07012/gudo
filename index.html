@@ -10,9 +10,9 @@
 html,body{background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo","Noto Sans KR",sans-serif;-webkit-tap-highlight-color:transparent}
 body{min-height:100dvh;display:flex;justify-content:center;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
 .wrap{width:100%;max-width:520px;padding:12px 14px 24px;display:flex;flex-direction:column;gap:12px}
-header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+header{display:flex;flex-direction:column;align-items:stretch;gap:10px}
 h1{font-size:18px;font-weight:700;letter-spacing:-.02em}
-.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:3px}
 .seg button{border:0;background:none;color:var(--dim);font:inherit;font-size:14px;padding:8px 12px;border-radius:9px;min-height:38px}
 .seg button.on{background:#3a2a20;color:var(--or);font-weight:600}
 #stage{position:relative;width:100%;aspect-ratio:3/4;border-radius:18px;overflow:hidden;background:#000;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -56,6 +56,8 @@ h1{font-size:18px;font-weight:700;letter-spacing:-.02em}
     <div class="seg" id="mode">
       <button data-m="single" class="on">한 사람</button>
       <button data-m="group">여럿</button>
+      <button data-m="land">풍경</button>
+      <button data-m="arch">건축</button>
     </div>
   </header>
 
@@ -189,7 +191,7 @@ function pickTarget(sub){
 }
 
 function reset(){
-  S.target=null;S.ok=false;S.sm=null;S.prevBox=null;S.recZoom=null;S.zoomDone=false;
+  S.target=null;S.ok=false;S.sm=null;S.prevBox=null;S.recZoom=null;S.zoomDone=false;S.hz=null;S.bc=null;S.scene=null;
   S.ev=null;S.evDone=false;S.evApplied=0;S.evFactor=1;S.shot=false;cv.style.filter='';
   if(S.track){const c=S.track.getCapabilities?.()||{};if(c.exposureCompensation)S.track.applyConstraints({advanced:[{exposureCompensation:0}]}).catch(()=>{})}
 }
@@ -247,6 +249,7 @@ function detectPhoto(){
 }
 
 function dirText(sub){
+  if(S.mode==="land"||S.mode==="arch")return sceneDir();
   const dx=(sub.ax-S.target.x*W)/W,dy=(sub.ay-S.target.y*H)/H,cam=S.src==='cam';
   const h=Math.abs(dx)>.025?(cam?(dx>0?'오른쪽으로 돌려보세요':'왼쪽으로 돌려보세요'):(dx>0?'왼쪽으로 끌어보세요':'오른쪽으로 끌어보세요')):'';
   const vt=Math.abs(dy)>.025?(cam?(dy>0?'아래로 기울여보세요':'위로 들어보세요'):(dy>0?'위로 끌어보세요':'아래로 끌어보세요')):'';
@@ -284,9 +287,9 @@ const hint=$('#hint'),cap=$('#cap');let capAct=null;
 function ui(sub){
   let t,s,ok=false,c=null;
   if(!S.src)return;
-  if(!sub){t=S.loading?'인식 모델 불러오는 중…':'피사체를 찾는 중…';s=S.src==='photo'?'사진 속 주인공을 탭해서 직접 지정할 수 있어요':'사람이나 물체를 화면에 담아주세요'}
+  if(!sub){t=S.mode==='land'?'수평선을 찾는 중…':S.loading?'인식 모델 불러오는 중…':'피사체를 찾는 중…';s=S.mode==='land'?'하늘과 땅의 경계가 보이게 담아주세요':S.src==='photo'?'사진 속 주인공을 탭해서 직접 지정할 수 있어요':'사람이나 물체를 화면에 담아주세요'}
   else if(S.recZoom){t=`${S.recZoom}x 줌을 추천해요`;s='노란 캡슐을 누르면 적용돼요';c=['zoom',`${S.recZoom}x 적용`]}
-  else if(!S.ok){t='점을 원에 맞춰보세요';s=dirText(sub)}
+  else if(!S.ok){t=S.mode==='land'?'수평선을 주황 선에 맞춰보세요':S.mode==='arch'?'건물을 반듯하게, 가운데로':'점을 원에 맞춰보세요';s=dirText(sub)}
   else if(!S.evDone){ok=true;t='좋아요! 구도가 맞았어요';
     if(S.ev==null)s='밝기를 확인하는 중…';else{s='노출 캡슐을 누르면 밝기도 맞춰져요';c=['ev',`밝기 ${S.ev>0?'↑ +':'↓ '}${S.ev}`]}}
   else{ok=true;t=S.shot?'찍었어요! 다시 맞춰볼 수 있어요':'지금 찍으세요';s='초록이면 준비 완료예요'}
@@ -296,7 +299,7 @@ function ui(sub){
   hint.hidden=false;hint.classList.toggle('ok',ok);hint.querySelector('b').textContent=t;hint.querySelector('span').textContent=s;
   cap.hidden=!c;if(c){cap.textContent=c[1];capAct=c[0]}
   $('#zbadge').hidden=false;$('#zbadge').textContent=zb;
-  $('#shutter').disabled=!sub;
+  $('#shutter').disabled=!S.src;
   const st={zoom:S.zoomDone,comp:S.ok,ev:S.evDone,shot:S.shot};
   let nowSet=false;
   for(const el of document.querySelectorAll('#steps div')){
@@ -315,6 +318,7 @@ function frame(now){
   ctx.clearRect(0,0,W,H);
   if(S.src==='cam'&&vid.readyState<2)return;
   ctx.drawImage(S.src==='cam'?vid:S.img,v.ox,v.oy,v.w*v.s,v.h*v.s);
+  if(S.mode==='land'||S.mode==='arch'){sceneFrame(now);return}
   if(S.src==='cam'&&S.det&&now-S.lastDet>90){
     S.lastDet=now;try{const r=S.det.detectForVideo(vid,nextTs());S.dets=norm(r.detections,vid.videoWidth,vid.videoHeight)}catch(e){}
   }
@@ -330,6 +334,116 @@ function frame(now){
 }
 requestAnimationFrame(frame);
 
+
+// ===== 풍경·건축 모드 =====
+const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+let sensorsOn=false;
+function onMotion(e){
+  const g=e.accelerationIncludingGravity;if(!g||g.x==null)return;
+  let x=g.x,y=g.y,z=g.z;if(isIOS){x=-x;y=-y;z=-z}
+  const roll=Math.atan2(x,y)*180/Math.PI,pitch=Math.atan2(z,Math.hypot(x,y))*180/Math.PI,p=S.tilt;
+  S.tilt=p?{roll:p.roll+(roll-p.roll)*.2,pitch:p.pitch+(pitch-p.pitch)*.2,t:performance.now()}:{roll,pitch,t:performance.now()};
+}
+async function enableSensors(){
+  if(sensorsOn)return;
+  try{if(typeof DeviceMotionEvent!=='undefined'&&DeviceMotionEvent.requestPermission){if(await DeviceMotionEvent.requestPermission()!=='granted')return}}catch(e){return}
+  addEventListener('devicemotion',onMotion);sensorsOn=true;
+}
+function tiltNow(now){
+  const t=S.tilt;return S.src==='cam'&&t&&now-t.t<1000&&Math.abs(t.roll)<45?t:null;
+}
+const scv=document.createElement('canvas');scv.width=60;scv.height=80;
+const scx=scv.getContext('2d',{willReadFrequently:true});
+function robustFit(pts){
+  const fit=p=>{const n=p.length;if(n<2)return null;let a=0,b=0,c=0,d=0;for(const [x,y] of p){a+=x;b+=y;c+=x*x;d+=x*y}
+    const den=n*c-a*a;if(!den)return null;const m=(n*d-a*b)/den;return {m,b:(b-m*a)/n}};
+  if(pts.length<18)return null;
+  let f=fit(pts);if(!f)return null;
+  const keep=pts.filter(([x,y])=>Math.abs(y-(f.b+f.m*x))<4);
+  if(keep.length<15)return null;
+  f=fit(keep);return f&&Math.abs(f.m)<.4?f:null;
+}
+function scan(now){
+  scx.drawImage(cv,0,0,60,80);const d=scx.getImageData(0,0,60,80).data,g=new Float32Array(4800);
+  for(let i=0;i<4800;i++)g[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];
+  if(S.mode==='land'){
+    // 열마다 '위는 밝고 아래는 어두운' 경계가 가장 센 곳 → 직선으로 맞춤
+    const pts=[];
+    for(let x=0;x<60;x++){
+      let best=0,by=-1;
+      for(let y=10;y<70;y++){let a=0,b=0;for(let k=1;k<=3;k++){a+=g[(y-k)*60+x];b+=g[(y+k-1)*60+x]}const v=(a-b)/3;if(v>best){best=v;by=y}}
+      if(best>10)pts.push([x,by]);
+    }
+    const f=robustFit(pts);
+    if(f){const y=(f.b+f.m*29.5)/80,ang=Math.atan(f.m)*180/Math.PI,h=S.hz;
+      S.hz=h?{y:h.y+(y-h.y)*.3,ang:h.ang+(ang-h.ang)*.3,seen:now}:{y,ang,seen:now}}
+    else if(S.hz&&now-S.hz.seen>800)S.hz=null;
+  }else{
+    // 세로 윤곽이 몰린 곳의 무게중심 = 건물 중심
+    let sw=0,sxw=0;
+    for(let x=1;x<59;x++){let e=0;for(let y=8;y<72;y++){const i=y*60+x;e+=Math.abs(g[i+1]-g[i-1])}e*=e;sw+=e;sxw+=e*x}
+    if(sw>0){const c=(sxw/sw)/59;S.bc=S.bc==null?c:S.bc+(c-S.bc)*.3}
+  }
+}
+function sceneFrame(now){
+  S.zoomDone=true;S.recZoom=null;
+  if(now-S.lastScan>140||!S.lastScan){S.lastScan=now;scan(now)}
+  const land=S.mode==='land',t=tiltNow(now),cam=S.src==='cam';
+  let sub=null;
+  if(land&&S.hz){if(!S.target)S.target={x:.5,y:S.hz.y<.5?1/3:2/3};sub={x0:0,y0:0,x1:W,y1:H,ax:W/2,ay:S.hz.y*H}}
+  if(!land&&S.bc!=null){S.target={x:.5,y:.5};sub={x0:0,y0:0,x1:W,y1:H,ax:S.bc*W,ay:H/2}}
+  if(sub){
+    const tilt=cam?(t?t.roll:(land?S.hz.ang:0)):0;
+    const lvlOk=Math.abs(tilt)<(S.ok?2.2:1.5)&&(land||!t||Math.abs(t.pitch)<(S.ok?4.5:3));
+    const dd=land?Math.abs(sub.ay/H-S.target.y):Math.abs(sub.ax/W-.5);
+    const posOk=dd<(S.ok?.045:.028);
+    S.ok=lvlOk&&posOk;S.scene={tilt,pitch:t?t.pitch:null,lvlOk,posOk};
+    if(S.ok&&!S.evDone&&S.ev==null&&now-S.lastEv>400){S.lastEv=now;measureEv(sub)}
+  }else S.ok=false;
+  drawScene(sub,t,now);ui(sub);
+}
+function sceneDir(){
+  const s=S.scene,cam=S.src==='cam';if(!s)return '';
+  if(!s.lvlOk){
+    if(S.mode==='arch'&&s.pitch!=null&&Math.abs(s.pitch)>=3&&Math.abs(s.tilt)<1.5)
+      return s.pitch>0?`카메라가 위로 ${Math.abs(s.pitch).toFixed(0)}° 들렸어요 · 세워서 찍고, 안 담기면 뒤로 물러나세요`:`카메라가 아래로 ${Math.abs(s.pitch).toFixed(0)}° 숙여졌어요 · 똑바로 세워주세요`;
+    return `수평이 ${Math.abs(s.tilt).toFixed(1)}° 기울었어요 · ${s.tilt<0?'왼쪽':'오른쪽'}으로 살짝 돌려보세요`;
+  }
+  if(S.mode==='land'){const up=S.hz.y<S.target.y;
+    return cam?(up?'카메라를 위로 들어 수평선을 내려보세요':'카메라를 아래로 숙여 수평선을 올려보세요'):(up?'사진을 아래로 끌어보세요':'사진을 위로 끌어보세요')}
+  const right=S.bc>.5;
+  return cam?`카메라를 ${right?'오른쪽':'왼쪽'}으로 돌려 건물을 가운데로`:`사진을 ${right?'왼쪽':'오른쪽'}으로 끌어보세요`;
+}
+function drawLevel(t){
+  const cx=W/2,cy=Math.max(70,H*.14),L=Math.min(70,W*.18),ok=Math.abs(t.roll)<1.5&&(S.mode==='land'||Math.abs(t.pitch)<3);
+  oc.save();oc.lineCap='round';oc.lineWidth=2;oc.strokeStyle='rgba(255,255,255,.6)';
+  line(cx-L-16,cy,cx-L-4,cy);line(cx+L+4,cy,cx+L+16,cy);
+  oc.translate(cx,cy);oc.rotate(t.roll*Math.PI/180);oc.lineWidth=3;oc.strokeStyle=ok?C.gr:C.ye;line(-L,0,L,0);oc.restore();
+  oc.font='600 13px system-ui,sans-serif';oc.textAlign='center';oc.fillStyle=ok?C.gr:'#fff';
+  let s=`${Math.abs(t.roll).toFixed(1)}°`;if(S.mode==='arch')s+=` · ${t.pitch>0?'위로':'아래로'} ${Math.abs(t.pitch).toFixed(0)}°`;
+  oc.fillText(s,cx,cy+22);
+}
+function drawScene(sub,t,now){
+  oc.clearRect(0,0,W,H);oc.setLineDash([]);
+  oc.lineWidth=1;oc.strokeStyle='rgba(255,255,255,.35)';
+  for(const f of [1/3,2/3])line(f*W,0,f*W,H);
+  const land=S.mode==='land',col=S.ok?C.gr:C.bl;
+  if(land){
+    for(const f of [1/3,2/3]){const on=S.target&&Math.abs(S.target.y-f)<.01;oc.lineWidth=on?4:1.5;oc.strokeStyle=on?C.or:'rgba(255,138,61,.45)';line(0,f*H,W,f*H)}
+    if(S.hz){const yc=S.hz.y*H,k=Math.tan(S.hz.ang*Math.PI/180);oc.lineWidth=2.5;oc.strokeStyle=col;oc.setLineDash([10,7]);line(0,yc-k*W/2,W,yc+k*W/2);oc.setLineDash([])}
+  }else{
+    for(const f of [1/3,2/3])line(0,f*H,W,f*H);
+    oc.setLineDash([7,6]);oc.lineWidth=2;oc.strokeStyle=C.or;line(W/2,0,W/2,H);oc.setLineDash([]);
+  }
+  if(sub&&S.target){
+    const tx=S.target.x*W,ty=S.target.y*H;
+    oc.strokeStyle=col;oc.lineWidth=3;oc.beginPath();oc.arc(tx,ty,17,0,7);oc.stroke();
+    if(S.ok){const p=(now%1400)/1400;oc.globalAlpha=1-p;oc.lineWidth=2;oc.beginPath();oc.arc(tx,ty,17+p*18,0,7);oc.stroke();oc.globalAlpha=1}
+    oc.fillStyle=col;oc.beginPath();oc.arc(sub.ax,sub.ay,9,0,7);oc.fill();
+  }
+  if(t)drawLevel(t);
+}
+
 function status(m){$('#status').textContent=m}
 function setSrc(){
   $('#empty').hidden=true;$('#srcTag').hidden=false;
@@ -340,6 +454,7 @@ function stopCam(){
   const st=vid.srcObject;if(st)st.getTracks().forEach(t=>t.stop());vid.srcObject=null;S.track=null;S.hwZoom=false;
 }
 async function startCam(){
+  enableSensors();
   if(!navigator.mediaDevices?.getUserMedia){status('이 브라우저에서는 카메라를 쓸 수 없어요. HTTPS 주소로 열어주세요.');return}
   try{
     const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:960}},audio:false});
@@ -358,11 +473,18 @@ $('#eCam').addEventListener('click',startCam);$('#bCam').addEventListener('click
 $('#ePhoto').addEventListener('click',pickPhoto);$('#bPhoto').addEventListener('click',pickPhoto);
 $('#bRe').addEventListener('click',()=>{if(S.src==='photo')S.zoom=1,S.center=true;reset();lastUI=''});
 $('#bAuto').addEventListener('click',()=>{
+  if(S.mode==='land'||S.mode==='arch'){
+    let to=null;
+    if(S.mode==='land'&&S.hz&&S.target)to={x:S.pan.x,y:S.pan.y+(S.target.y-S.hz.y)*H};
+    if(S.mode==='arch'&&S.bc!=null)to={x:S.pan.x+(.5-S.bc)*W,y:S.pan.y};
+    if(to)S.anim={t0:performance.now(),from:{...S.pan},to};
+    return;
+  }
   const v=view();if(!v)return;const sub=subject(v);if(!sub||!S.target)return;
   S.anim={t0:performance.now(),from:{...S.pan},to:{x:S.pan.x+(S.target.x*W-sub.ax),y:S.pan.y+(S.target.y*H-sub.ay)}};
 });
 for(const b of document.querySelectorAll('#mode button'))b.addEventListener('click',()=>{
-  document.querySelectorAll('#mode button').forEach(x=>x.classList.toggle('on',x===b));S.mode=b.dataset.m;reset();lastUI='';
+  document.querySelectorAll('#mode button').forEach(x=>x.classList.toggle('on',x===b));S.mode=b.dataset.m;reset();lastUI='';enableSensors();
 });
 
 let drag=null;
