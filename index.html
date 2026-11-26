@@ -140,11 +140,38 @@ function union(ps){
   const x1=Math.max(...ps.map(d=>d.x+d.w)),y1=Math.max(...ps.map(d=>d.y+d.h));
   return {x:x0,y:y0,w:x1-x0,h:y1-y0,cat:'person'};
 }
+function iou(a,b){
+  const x0=Math.max(a.x,b.x),y0=Math.max(a.y,b.y),x1=Math.min(a.x+a.w,b.x+b.w),y1=Math.min(a.y+a.h,b.y+b.h);
+  const i=Math.max(0,x1-x0)*Math.max(0,y1-y0);return i/(a.w*a.h+b.w*b.h-i||1);
+}
+// 흔들림 보정: 박스 전체를 부드럽게 따라가고, 아주 작은 변화는 무시
+function stabilize(sub,now){
+  if(!sub){
+    if(S.sm&&now-S.sm.seen<700)return S.sm.sub;   // 잠깐 놓쳐도 0.7초간 유지
+    S.sm=null;return null;
+  }
+  if(!S.sm){S.sm={sub:{...sub},seen:now};return S.sm.sub}
+  const p=S.sm.sub,dead=.012*W;
+  for(const k of ['x0','y0','x1','y1','ax','ay']){
+    const d=sub[k]-p[k];
+    if(Math.abs(d)<dead)continue;                  // 데드존
+    const a=Math.abs(d)>.15*W?.5:.12;              // 크게 움직이면 빨리, 작게는 천천히
+    p[k]+=d*a;
+  }
+  p.people=sub.people;p.person=sub.person;p.group=sub.group;S.sm.seen=now;
+  return p;
+}
 function subject(v){
   const ps=S.dets.filter(d=>d.cat==='person');
   const list=ps.length?ps:S.dets;if(!list.length)return null;
   const group=S.mode==='group'&&ps.length>0;
-  const box=group?union(ps):list.reduce((a,b)=>a.w*a.h>b.w*b.h?a:b);
+  let box;
+  if(group)box=union(ps);
+  else if(S.prevBox){
+    const best=list.map(d=>[iou(d,S.prevBox),d]).sort((a,b)=>b[0]-a[0])[0];
+    box=best[0]>.2?best[1]:list.reduce((a,b)=>a.w*a.h>b.w*b.h?a:b);
+  }else box=list.reduce((a,b)=>a.w*a.h>b.w*b.h?a:b);
+  S.prevBox=box;
   const [x0,y0]=toStage(box.x,box.y,v),[x1,y1]=toStage(box.x+box.w,box.y+box.h,v);
   const person=box.cat==='person';
   const ax=(x0+x1)/2,ay=person?y0+(y1-y0)*(group?0.22:0.32):(y0+y1)/2;
@@ -162,7 +189,7 @@ function pickTarget(sub){
 }
 
 function reset(){
-  S.target=null;S.ok=false;S.sm=null;S.recZoom=null;S.zoomDone=false;
+  S.target=null;S.ok=false;S.sm=null;S.prevBox=null;S.recZoom=null;S.zoomDone=false;
   S.ev=null;S.evDone=false;S.evApplied=0;S.evFactor=1;S.shot=false;cv.style.filter='';
   if(S.track){const c=S.track.getCapabilities?.()||{};if(c.exposureCompensation)S.track.applyConstraints({advanced:[{exposureCompensation:0}]}).catch(()=>{})}
 }
@@ -292,10 +319,7 @@ function frame(now){
     S.lastDet=now;try{const r=S.det.detectForVideo(vid,nextTs());S.dets=norm(r.detections,vid.videoWidth,vid.videoHeight)}catch(e){}
   }
   let sub=subject(v);
-  if(sub&&S.src==='cam'){
-    if(S.sm){S.sm.ax+=(sub.ax-S.sm.ax)*.35;S.sm.ay+=(sub.ay-S.sm.ay)*.35}else S.sm={ax:sub.ax,ay:sub.ay};
-    sub.ax=S.sm.ax;sub.ay=S.sm.ay;
-  }
+  if(S.src==='cam')sub=stabilize(sub,now);
   if(sub&&!S.target)pickTarget(sub);
   if(sub&&S.target){
     const d=Math.hypot((sub.ax-S.target.x*W)/W,(sub.ay-S.target.y*H)/H);
@@ -375,7 +399,7 @@ const V='0.10.14',CDN=`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${V}
   try{
     const m=await import(`${CDN}/vision_bundle.mjs`);
     const fs=await m.FilesetResolver.forVisionTasks(`${CDN}/wasm`);
-    const mk=d=>m.ObjectDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite',delegate:d},scoreThreshold:.35,maxResults:6,runningMode:'VIDEO'});
+    const mk=d=>m.ObjectDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite',delegate:d},scoreThreshold:.45,maxResults:6,runningMode:'VIDEO'});
     try{S.det=await mk('GPU')}catch(e){S.det=await mk('CPU')}
     status('');if(S.pending&&S.img)detectPhoto();
   }catch(e){status('인식 모델을 못 불러왔어요. 사진 모드에서 피사체를 탭해 지정할 수 있어요.')}
