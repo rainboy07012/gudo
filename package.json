@@ -4,7 +4,7 @@
   "private": true,
   "description": "프레임핏 — 구도 가이드 카메라",
   "scripts": {
-    "prepare-web": "rm -rf www && mkdir -p www/vendor/mediapipe www/models && cp -r index.html privacy.html manifest.webmanifest icons www/ && cp node_modules/@mediapipe/tasks-vision/vision_bundle.mjs www/vendor/mediapipe/ && cp -r node_modules/@mediapipe/tasks-vision/wasm www/vendor/mediapipe/"
+    "prepare-web": "rm -rf www && mkdir -p www/vendor/mediapipe www/models && cp -r index.html privacy.html manifest.webmanifest icons www/ && cp node_modules/@mediapipe/tasks-vision/vision_bundle.mjs www/vendor/mediapipe/ && cp node_modules/@mediapipe/tasks-vision/vision_bundle.cjs www/vendor/mediapipe/vision_bundle.js && cp -r node_modules/@mediapipe/tasks-vision/wasm www/vendor/mediapipe/"
   },
   "dependencies": {
     "@capacitor-community/media": "^9.1.0",

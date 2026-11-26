@@ -53,7 +53,7 @@ svg{display:block}
 .vf{display:grid;place-items:center;overflow:hidden}
 #stage{position:relative;height:100%;max-width:100%;aspect-ratio:3/4;background:#0b0b0c;touch-action:none;overflow:hidden}
 #stage canvas{position:absolute;inset:0;width:100%;height:100%}
-#vid{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+#vid{position:absolute;left:0;top:0;object-fit:fill;pointer-events:none;transform-origin:50% 50%;display:none}
 #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
 #flash.on{animation:flash 260ms var(--ease-out)}
 @keyframes flash{from{opacity:.75}to{opacity:0}}
@@ -378,11 +378,12 @@ function subject(v,now){
 }
 function stabilize(sub,now){
   if(!sub){if(S.sm&&now-S.sm.seen<700)return S.sm.sub;S.sm=null;return null}
-  if(!S.sm){S.sm={sub:{...sub},seen:now};return S.sm.sub}
-  const p=S.sm.sub,dead=.012*W;
+  if(!S.sm){S.sm={sub:{...sub},seen:now,t:now};return S.sm.sub}
+  // 인식 결과(초당 10~15번) 사이를 매 프레임 미끄러지듯 이어줌. 시간 기반이라 기기 속도와 무관
+  const p=S.sm.sub,dt=Math.min(.1,(now-S.sm.t)/1000),a=1-Math.exp(-dt/.08),dead=.0025*W;S.sm.t=now;
   for(const k of ['x0','y0','x1','y1','ax','ay']){
     const d=sub[k]-p[k];if(Math.abs(d)<dead)continue;
-    p[k]+=d*(Math.abs(d)>.15*W?.5:.12);
+    p[k]+=Math.abs(d)>.25*W?d:d*a;
   }
   p.people=sub.people;p.person=sub.person;p.group=sub.group;S.sm.seen=now;return p;
 }
@@ -403,11 +404,17 @@ function pickTarget(sub){
 }
 
 /* ---------- 상태 초기화 / 줌 / 노출 ---------- */
+function sampleTo(c2,w,h){
+  const v=view();if(!v)return false;const k=w/W;
+  c2.save();c2.clearRect(0,0,w,h);
+  if(mirrored()){c2.translate(w,0);c2.scale(-1,1)}
+  c2.drawImage(S.src==='cam'?vid:S.img,v.ox*k,v.oy*k,v.w*v.s*k,v.h*v.s*k);c2.restore();return true;
+}
 function resetGuide(){S.target=null;S.ok=false;S.sm=null;S.prevBox=null;S.recZoom=null;lastUI=''}
 function reset(){
   S.pin=null;S.tapFx=null;const ub=document.querySelector('#bUnpin');if(ub)ub.hidden=true;
   S.target=null;S.ok=false;S.sm=null;S.prevBox=null;S.recZoom=null;S.zoomDone=false;S.hz=null;S.bc=null;S.scene=null;
-  S.ev=null;S.evDone=false;S.evApplied=0;S.evFactor=1;cv.style.filter='';
+  S.ev=null;S.evDone=false;S.evApplied=0;S.evFactor=1;cv.style.filter='';vid.style.filter='';
   if(S.track){const c=S.track.getCapabilities?.()||{};if(c.exposureCompensation)S.track.applyConstraints({advanced:[{exposureCompensation:0}]}).catch(()=>{})}
   lastUI='';
 }
@@ -429,13 +436,13 @@ async function applyEv(){
     const c=S.track.getCapabilities?.()||{};
     if(c.exposureCompensation){try{await S.track.applyConstraints({advanced:[{exposureCompensation:clamp(ev,c.exposureCompensation.min,c.exposureCompensation.max)}]});hw=true}catch(e){}}
   }
-  if(!hw){S.evFactor=2**(ev/2.2);cv.style.filter=`brightness(${S.evFactor.toFixed(3)})`}
+  if(!hw){S.evFactor=2**(ev/2.2);cv.style.filter=vid.style.filter=`brightness(${S.evFactor.toFixed(3)})`}
   S.evDone=true;S.evApplied=ev;
 }
 const probe=document.createElement('canvas');probe.width=48;probe.height=64;
 const pc=probe.getContext('2d',{willReadFrequently:true});
 function measureEv(sub){
-  pc.drawImage(cv,0,0,48,64);const d=pc.getImageData(0,0,48,64).data;
+  sampleTo(pc,48,64);const d=pc.getImageData(0,0,48,64).data;
   const bx0=Math.floor(clamp(sub.x0/W,0,1)*48),bx1=Math.ceil(clamp(sub.x1/W,0,1)*48);
   const by0=Math.floor(clamp(sub.y0/H,0,1)*64),by1=Math.ceil(clamp(sub.y1/H,0,1)*64);
   let all=0,n=0,sb=0,m=0;
@@ -465,7 +472,7 @@ const TW=120,TH=160,TR=9,SR=12;
 const tcv=document.createElement('canvas');tcv.width=TW;tcv.height=TH;
 const tcx=tcv.getContext('2d',{willReadFrequently:true});
 function grayFrame(){
-  tcx.drawImage(cv,0,0,TW,TH);const d=tcx.getImageData(0,0,TW,TH).data,g=new Float32Array(TW*TH);
+  sampleTo(tcx,TW,TH);const d=tcx.getImageData(0,0,TW,TH).data,g=new Float32Array(TW*TH);
   for(let i=0;i<g.length;i++)g[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];return g;
 }
 function patch(g,cx,cy){
@@ -514,7 +521,13 @@ function selectAt(px,py,now){
   $('#bUnpin').hidden=false;
 }
 function clearPin(){S.pin=null;$('#bUnpin').hidden=true;resetGuide()}
-function detectPhoto(){
+async function detectPhoto(){
+  if(wReady){
+    const img=S.img,sc=Math.min(1,640/Math.max(img.naturalWidth,img.naturalHeight));
+    try{const bmp=await createImageBitmap(img,{resizeWidth:Math.round(img.naturalWidth*sc),resizeHeight:Math.round(img.naturalHeight*sc)});
+      worker.postMessage({type:'detect',bmp,face:false,id:++reqId,photo:true},[bmp])}catch(e){}
+    return;
+  }
   if(!S.det){S.pending=true;return}
   S.pending=false;
   try{const r=S.det.detectForVideo(S.img,nextTs());S.dets=norm(r.detections,S.img.naturalWidth,S.img.naturalHeight)}catch(e){S.dets=[]}
@@ -549,7 +562,7 @@ function robustFit(pts){
   f=fit(keep);return f&&Math.abs(f.m)<.4?f:null;
 }
 function scan(now){
-  scx.drawImage(cv,0,0,60,80);const d=scx.getImageData(0,0,60,80).data,g=new Float32Array(4800);
+  sampleTo(scx,60,80);const d=scx.getImageData(0,0,60,80).data,g=new Float32Array(4800);
   for(let i=0;i<4800;i++)g[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];
   if(S.mode==='land'){
     const pts=[];
@@ -702,6 +715,13 @@ function drawScene(sub,t,now){
 }
 
 /* ---------- 메인 루프 ---------- */
+let vfKey='';
+function placeVideo(v){
+  const key=[v.ox,v.oy,v.s,mirrored()].map(x=>typeof x==='number'?x.toFixed(2):x).join();
+  if(key===vfKey)return;vfKey=key;
+  Object.assign(vid.style,{width:v.w*v.s+'px',height:v.h*v.s+'px',transform:`translate(${v.ox}px,${v.oy}px)${mirrored()?' scaleX(-1)':''}`});
+}
+function showSource(){vid.style.display=S.src==='cam'?'block':'none';cv.style.display=S.src==='cam'?'none':'block';vfKey=''}
 function frame(now){
   requestAnimationFrame(frame);
   if(!S.src)return;
@@ -709,15 +729,11 @@ function frame(now){
   if(S.anim){const a=S.anim,p=clamp((now-a.t0)/450,0,1),e=1-(1-p)**3;
     S.pan={x:a.from.x+(a.to.x-a.from.x)*e,y:a.from.y+(a.to.y-a.from.y)*e};if(p>=1)S.anim=null}
   if(S.src==='cam'&&vid.readyState<2)return;
-  ctx.save();ctx.clearRect(0,0,W,H);
-  if(mirrored()){ctx.translate(W,0);ctx.scale(-1,1)}
-  ctx.drawImage(S.src==='cam'?vid:S.img,v.ox,v.oy,v.w*v.s,v.h*v.s);ctx.restore();
+  if(S.src==='cam'){placeVideo(v)}
+  else{ctx.save();ctx.clearRect(0,0,W,H);ctx.drawImage(S.img,v.ox,v.oy,v.w*v.s,v.h*v.s);ctx.restore()}
   const scene=S.mode==='land'||S.mode==='arch';
   if(scene&&!S.pin){const {sub,t}=sceneState(now);drawScene(sub,t,now);drawTap(now);ui(sub);return}
-  if(S.src==='cam'&&now-S.lastDet>90){
-    const face=selfie()&&S.face&&!(S.pin&&S.pin.kind==='track'),det=face?S.face:S.det;
-    if(det&&!(S.pin&&S.pin.kind==='track')){S.lastDet=now;try{const r=det.detectForVideo(vid,nextTs());S.dets=face?normFaces(r.detections,vid.videoWidth,vid.videoHeight):norm(r.detections,vid.videoWidth,vid.videoHeight)}catch(e){}}
-  }
+  if(S.src==='cam'&&!(S.pin&&S.pin.kind==='track'))requestDetect(now);
   if(S.pin&&S.pin.kind==='track')updateTrack(now);
   let sub=subject(v,now);
   if(S.src==='cam')sub=stabilize(sub,now);
@@ -765,6 +781,7 @@ async function startCam(){
   }
 }
 function setSrc(){
+  showSource();
   const photo=S.src==='photo';
   $('#bEndPractice').hidden=!photo;$('#bFlip').hidden=photo;$('#shutter').disabled=!S.src;lastUI='';
 }
@@ -943,12 +960,92 @@ async function loadDetector(base,model,faceModel){
   mf('GPU').catch(()=>mf('CPU')).then(f=>{S.face=f}).catch(()=>{});
   return det;
 }
-(async()=>{
+/* 워커: 인식을 화면 그리기와 분리 (워커 안에서는 바깥 변수를 쓰지 않음) */
+function workerMain(){
+  let det=null,face=null;
+  const norm=(ds,w,h)=>ds.map(d=>({x:d.boundingBox.originX/w,y:d.boundingBox.originY/h,w:d.boundingBox.width/w,h:d.boundingBox.height/h,cat:(d.categories&&d.categories[0]&&d.categories[0].categoryName)||''}));
+  const normF=(ds,w,h)=>ds.map(d=>{const b=d.boundingBox,k=d.keypoints||[],two=k.length>1;
+    return {x:b.originX/w,y:b.originY/h,w:b.width/w,h:b.height/h,cat:'face',ex:two?(k[0].x+k[1].x)/2:(b.originX+b.width/2)/w,ey:two?(k[0].y+k[1].y)/2:(b.originY+b.height*.4)/h}});
+  self.onmessage=async e=>{
+    const m=e.data;
+    if(m.type==='init'){
+      try{
+        self.module={exports:{}};self.exports=self.module.exports;
+        importScripts(m.bundle);
+        const v=self.module.exports,fs=await v.FilesetResolver.forVisionTasks(m.base+'/wasm');
+        det=await v.ObjectDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:m.model},scoreThreshold:.45,maxResults:6,runningMode:'IMAGE'});
+        self.postMessage({type:'ready'});
+        try{face=await v.FaceDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:m.face},minDetectionConfidence:.5,runningMode:'IMAGE'});self.postMessage({type:'faceReady'})}catch(err){}
+      }catch(err){self.postMessage({type:'error',msg:String((err&&err.message)||err)})}
+      return;
+    }
+    if(m.type==='detect'){
+      const b=m.bmp,w=b.width,h=b.height;let dets=[],ok=true;
+      try{dets=m.face&&face?normF(face.detect(b).detections,w,h):det?norm(det.detect(b).detections,w,h):[]}catch(err){ok=false}
+      b.close();self.postMessage({type:'result',id:m.id,dets,photo:!!m.photo,face:!!(m.face&&face),ok});
+    }
+  };
+}
+let worker=null,wReady=false,wBusy=false,reqId=0,wFails=0;
+function startWorker(base,bundle,model,face){
+  return new Promise((res,rej)=>{
+    try{
+      const url=URL.createObjectURL(new Blob(['('+workerMain.toString()+')()'],{type:'text/javascript'}));
+      const w=new Worker(url);const to=setTimeout(()=>{w.terminate();rej('timeout')},25000);
+      w.onmessage=e=>{const m=e.data;
+        if(m.type==='ready'){clearTimeout(to);worker=w;wReady=true;res()}
+        else if(m.type==='faceReady')S.faceReady=true;
+        else if(m.type==='error'){clearTimeout(to);w.terminate();rej(m.msg)}
+        else if(m.type==='result')onResult(m);
+      };
+      w.onerror=e=>{clearTimeout(to);rej(e.message||'worker error')};
+      w.postMessage({type:'init',base,bundle,model,face});
+    }catch(e){rej(e)}
+  });
+}
+function onResult(m){
+  if(!m.photo)wBusy=false;
+  if(!m.ok&&++wFails>5){wReady=false;fallbackMain();return}
+  if(m.photo){if(S.src==='photo')S.dets=m.dets;return}
+  if(S.src!=='cam')return;
+  if(m.face!==(selfie()&&!!S.faceReady))return; // 전면·후면 전환 직후의 지난 결과는 버림
+  S.dets=m.dets;
+}
+async function requestDetect(now){
+  if(wReady){
+    if(wBusy||now-S.lastDet<50||!vid.videoWidth)return;
+    wBusy=true;S.lastDet=now;
+    try{
+      const vw=vid.videoWidth,vh=vid.videoHeight,sc=384/Math.max(vw,vh);
+      const bmp=await createImageBitmap(vid,{resizeWidth:Math.round(vw*sc),resizeHeight:Math.round(vh*sc),resizeQuality:'low'});
+      worker.postMessage({type:'detect',bmp,face:selfie()&&!!S.faceReady,id:++reqId},[bmp]);
+    }catch(e){wBusy=false}
+    return;
+  }
+  // 워커를 못 쓸 때만 메인 스레드에서
+  if(now-S.lastDet<120)return;
+  const face=selfie()&&S.face,det=face?S.face:S.det;if(!det)return;
+  S.lastDet=now;
+  try{const r=det.detectForVideo(vid,nextTs());S.dets=face?normFaces(r.detections,vid.videoWidth,vid.videoHeight):norm(r.detections,vid.videoWidth,vid.videoHeight)}catch(e){}
+}
+const abs=p=>new URL(p,location.href).href.replace(/\/$/,'');
+async function localAvailable(){try{return (await fetch('vendor/mediapipe/vision_bundle.js',{method:'HEAD'})).ok}catch(e){return false}}
+async function fallbackMain(){
+  if(S.det)return;
   try{
-    if(NATIVE){try{S.det=await loadDetector(new URL('vendor/mediapipe',location.href).href.replace(/\/$/,''),'models/efficientdet_lite0.tflite','models/blaze_face_short_range.tflite')}catch(e){}}
+    if(await localAvailable()){try{S.det=await loadDetector(abs('vendor/mediapipe'),'models/efficientdet_lite0.tflite','models/blaze_face_short_range.tflite')}catch(e){}}
     if(!S.det)S.det=await loadDetector(CDN,REMOTE_MODEL,REMOTE_FACE);
     if(S.pending&&S.img)detectPhoto();
   }catch(e){snack('인식 기능을 불러오지 못했어요. 인터넷 연결을 확인해 주세요')}
+}
+window.__ffdbg=()=>({worker:wReady,busy:wBusy,mainDet:!!S.det,dets:S.dets.length});
+(async()=>{
+  const local=await localAvailable();
+  try{
+    if(local)await startWorker(abs('vendor/mediapipe'),abs('vendor/mediapipe/vision_bundle.js'),abs('models/efficientdet_lite0.tflite'),abs('models/blaze_face_short_range.tflite'));
+    else await startWorker(CDN,CDN+'/vision_bundle.cjs',REMOTE_MODEL,REMOTE_FACE);
+    if(S.src==='photo'&&S.img)detectPhoto();
+  }catch(e){console.warn('[framefit] worker unavailable:',e);await fallbackMain()}
   S.loading=false;lastUI='';
 })();
 }
