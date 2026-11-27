@@ -178,6 +178,7 @@ svg{display:block}
       <canvas id="view"></canvas>
       <canvas id="ov"></canvas>
       <div id="flash"></div>
+      <div class="chip" id="perf" hidden style="position:absolute;left:8px;top:8px;font-weight:400;font-size:12px;background:rgba(0,0,0,.6)"></div>
       <div class="vf-state" id="vfState" hidden>
         <h2 id="vfTitle"></h2>
         <p id="vfBody"></p>
@@ -255,7 +256,7 @@ svg{display:block}
     <span class="row-text"><b>개인정보처리방침</b><span>사진은 휴대폰 밖으로 나가지 않아요</span></span>
   </a>
   <p class="note"><b>PRO</b> 여럿·건축 모드는 베타 기간 동안 무료로 열려 있어요.</p>
-  <p class="meta">프레임핏 1.0.0</p>
+  <p class="meta" id="ver">프레임핏 1.0.0</p>
 </dialog>
 
 <div id="review" hidden>
@@ -376,11 +377,11 @@ function subject(v,now){
   const [x0,y0,x1,y1]=boxToStage(box,v),person=box.cat==='person';
   return {x0,y0,x1,y1,ax:(x0+x1)/2,ay:person?y0+(y1-y0)*(group?.22:.32):(y0+y1)/2,person,group,people:ps.map(d=>boxToStage(d,v))};
 }
-function stabilize(sub,now){
+function stabilize(sub,now,tau=.08){
   if(!sub){if(S.sm&&now-S.sm.seen<700)return S.sm.sub;S.sm=null;return null}
   if(!S.sm){S.sm={sub:{...sub},seen:now,t:now};return S.sm.sub}
   // 인식 결과(초당 10~15번) 사이를 매 프레임 미끄러지듯 이어줌. 시간 기반이라 기기 속도와 무관
-  const p=S.sm.sub,dt=Math.min(.1,(now-S.sm.t)/1000),a=1-Math.exp(-dt/.08),dead=.0025*W;S.sm.t=now;
+  const p=S.sm.sub,dt=Math.min(.1,(now-S.sm.t)/1000),a=1-Math.exp(-dt/tau),dead=.0025*W;S.sm.t=now;
   for(const k of ['x0','y0','x1','y1','ax','ay']){
     const d=sub[k]-p[k];if(Math.abs(d)<dead)continue;
     p[k]+=Math.abs(d)>.25*W?d:d*a;
@@ -536,7 +537,46 @@ async function detectPhoto(){
 /* ---------- 기울기 센서 ---------- */
 const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 let sensorsOn=false;
+/* 자이로: 휴대폰 회전을 적분해 두었다가, 인식 결과가 오기 전까지 점을 미리 옮김.
+   방향·세기는 실제 인식 결과와 비교해 스스로 맞춤(기기·OS마다 축 부호가 달라도 동작) */
+const GY={t:0,x:0,y:0,hist:[],sx:{pp:0,po:0,oo:0,k:0,on:false},sy:{pp:0,po:0,oo:0,k:0,on:false},cal:null,bx:null,by:null};
+function gyroAt(t){
+  const h=GY.hist;for(let i=h.length-1;i>=0;i--)if(h[i][0]<=t)return [h[i][1],h[i][2]];
+  return h.length?[h[0][1],h[0][2]]:[GY.x,GY.y];
+}
+function onRotation(e){
+  const r=e.rotationRate;if(!r||r.beta==null)return;
+  const t=performance.now();
+  if(GY.t){const dt=Math.min(.05,(t-GY.t)/1000);GY.x+=(r.gamma||0)*dt*Math.PI/180;GY.y+=(r.beta||0)*dt*Math.PI/180}
+  GY.t=t;GY.hist.push([t,GY.x,GY.y]);if(GY.hist.length>180)GY.hist.shift();
+}
+function gyroReset(){for(const a of [GY.sx,GY.sy])Object.assign(a,{pp:0,po:0,oo:0,k:0,on:false});GY.cal=null;GY.bx=null}
+function fitAxis(a,p,o){
+  a.pp=a.pp*.95+p*p;a.po=a.po*.95+p*o;a.oo=a.oo*.95+o*o;
+  if(a.pp<4e-4){a.on=false;return}
+  const k=a.po/a.pp,r=a.po/Math.sqrt(a.pp*a.oo+1e-12);
+  a.k=k;a.on=r>.6&&Math.abs(k)>.4&&Math.abs(k)<3;
+}
+function calibrate(dets,capT){
+  const v=view();const g=gyroAt(capT);GY.bx=g[0];GY.by=g[1];
+  if(!v||!dets.length){GY.cal=null;return}
+  let d=null;
+  if(GY.cal){const b=dets.map(x=>[iou(x,GY.cal.box),x]).sort((a,b)=>b[0]-a[0])[0];if(b&&b[0]>.3)d=b[1]}
+  if(!d)d=dets.reduce((a,b)=>a.w*a.h>b.w*b.h?a:b);
+  const span=v.w*v.s,[x0,y0,x1,y1]=boxToStage(d,v),ax=(x0+x1)/2/span,ay=(y0+y1)/2/span;
+  if(GY.cal&&capT-GY.cal.t<400){fitAxis(GY.sx,g[0]-GY.cal.gx,ax-GY.cal.ax);fitAxis(GY.sy,g[1]-GY.cal.gy,ay-GY.cal.ay)}
+  GY.cal={box:d,ax,ay,gx:g[0],gy:g[1],t:capT};
+}
+function predictShift(v){
+  if(GY.bx==null||!(GY.sx.on||GY.sy.on))return null;
+  const span=v.w*v.s;
+  return [GY.sx.on?GY.sx.k*span*(GY.x-GY.bx):0,GY.sy.on?GY.sy.k*span*(GY.y-GY.by):0];
+}
+function shiftSub(s,dx,dy){
+  return {...s,x0:s.x0+dx,x1:s.x1+dx,ax:s.ax+dx,y0:s.y0+dy,y1:s.y1+dy,ay:s.ay+dy,people:s.people.map(([a,b,c,e])=>[a+dx,b+dy,c+dx,e+dy])};
+}
 function onMotion(e){
+  onRotation(e);
   const g=e.accelerationIncludingGravity;if(!g||g.x==null)return;
   let x=g.x,y=g.y,z=g.z;if(isIOS){x=-x;y=-y;z=-z}
   const roll=Math.atan2(x,y)*180/Math.PI,pitch=Math.atan2(z,Math.hypot(x,y))*180/Math.PI,p=S.tilt,t=performance.now();
@@ -723,7 +763,7 @@ function placeVideo(v){
 }
 function showSource(){vid.style.display=S.src==='cam'?'block':'none';cv.style.display=S.src==='cam'?'none':'block';vfKey=''}
 function frame(now){
-  requestAnimationFrame(frame);
+  requestAnimationFrame(frame);PERF.frames++;
   if(!S.src)return;
   const v=view();if(!v)return;
   if(S.anim){const a=S.anim,p=clamp((now-a.t0)/450,0,1),e=1-(1-p)**3;
@@ -736,7 +776,9 @@ function frame(now){
   if(S.src==='cam'&&!(S.pin&&S.pin.kind==='track'))requestDetect(now);
   if(S.pin&&S.pin.kind==='track')updateTrack(now);
   let sub=subject(v,now);
-  if(S.src==='cam')sub=stabilize(sub,now);
+  let predicted=false;
+  if(S.src==='cam'&&sub&&!(S.pin&&S.pin.kind==='track')){const sh=predictShift(v);if(sh){sub=shiftSub(sub,sh[0],sh[1]);predicted=true}}
+  if(S.src==='cam')sub=stabilize(sub,now,predicted?.035:.08);
   if(sub&&!S.target)pickTarget(sub);
   if(sub&&S.target){
     const d=Math.hypot((sub.ax-S.target.x*W)/W,(sub.ay-S.target.y*H)/H);
@@ -748,6 +790,22 @@ function frame(now){
   ui(sub);
 }
 requestAnimationFrame(frame);
+
+/* ---------- 성능 표시 (설정 > 버전을 5번 탭) ---------- */
+let camFrames=0,vfcOn=false;
+function watchCamFps(){
+  if(vfcOn||!vid.requestVideoFrameCallback)return;vfcOn=true;
+  const cb=()=>{camFrames++;vid.requestVideoFrameCallback(cb)};vid.requestVideoFrameCallback(cb);
+}
+let verTaps=0,showPerf=false;
+document.querySelector('#ver').addEventListener('click',()=>{if(++verTaps>=5){verTaps=0;showPerf=!showPerf;$('#perf').hidden=!showPerf;snack(showPerf?'성능 표시를 켰어요':'성능 표시를 껐어요')}});
+setInterval(()=>{
+  if(showPerf){
+    const gy=GY.sx.on||GY.sy.on?'예측 켜짐':'예측 보정 중';
+    $('#perf').textContent=`화면 ${PERF.frames} · 카메라 ${camFrames} · 인식 ${PERF.det}회 ${PERF.ms.toFixed(0)}ms ${PERF.delegate} · ${gy}`;
+  }
+  PERF.frames=0;PERF.det=0;camFrames=0;
+},1000);
 
 /* ---------- 피드백 ---------- */
 let snackT=0;
@@ -770,9 +828,11 @@ async function startCam(){
   enableSensors();
   if(!navigator.mediaDevices?.getUserMedia){showVfState('이 화면에서는 카메라를 쓸 수 없어요','앱으로 설치하거나 https 주소로 열어주세요. 지금은 사진으로 연습할 수 있어요.',false);return}
   try{
-    const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:S.facing},width:{ideal:1920},height:{ideal:1440}},audio:false});
+    let st;
+    try{st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:S.facing},width:{ideal:1440},height:{ideal:1080},frameRate:{ideal:60}},audio:false})}
+    catch(err){if(err&&err.name==='OverconstrainedError')st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:S.facing}},audio:false});else throw err}
     stopCam();vid.srcObject=st;await vid.play();
-    S.track=st.getVideoTracks()[0];S.src='cam';S.img=null;S.dets=[];S.zoom=1;reset();setSrc();showVfState(null);
+    S.track=st.getVideoTracks()[0];gyroReset();watchCamFps();S.src='cam';S.img=null;S.dets=[];S.zoom=1;reset();setSrc();showVfState(null);
   }catch(e){
     const denied=e&&(e.name==='NotAllowedError'||e.name==='SecurityError');
     showVfState(denied?'카메라 권한이 필요해요':'카메라를 열지 못했어요',
@@ -973,20 +1033,38 @@ function workerMain(){
         self.module={exports:{}};self.exports=self.module.exports;
         importScripts(m.bundle);
         const v=self.module.exports,fs=await v.FilesetResolver.forVisionTasks(m.base+'/wasm');
-        det=await v.ObjectDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:m.model},scoreThreshold:.45,maxResults:6,runningMode:'IMAGE'});
-        self.postMessage({type:'ready'});
+        const mk=d=>v.ObjectDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:m.model,delegate:d},scoreThreshold:.45,maxResults:6,runningMode:'IMAGE'});
+        try{det=await mk('GPU');self.dg='GPU'}catch(err){det=await mk('CPU');self.dg='CPU'}
+        self.mk=mk;self.bench={GPU:[],CPU:[]};self.locked=self.dg==='CPU';
+        self.postMessage({type:'ready',delegate:self.dg});
         try{face=await v.FaceDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:m.face},minDetectionConfidence:.5,runningMode:'IMAGE'});self.postMessage({type:'faceReady'})}catch(err){}
       }catch(err){self.postMessage({type:'error',msg:String((err&&err.message)||err)})}
       return;
     }
     if(m.type==='detect'){
       const b=m.bmp,w=b.width,h=b.height;let dets=[],ok=true;
+      const t0=performance.now();
       try{dets=m.face&&face?normF(face.detect(b).detections,w,h):det?norm(det.detect(b).detections,w,h):[]}catch(err){ok=false}
-      b.close();self.postMessage({type:'result',id:m.id,dets,photo:!!m.photo,face:!!(m.face&&face),ok});
+      const ms=performance.now()-t0;
+      b.close();self.postMessage({type:'result',id:m.id,dets,photo:!!m.photo,face:!!(m.face&&face),ok,ms,delegate:self.dg});
+      // GPU와 CPU를 실제 프레임으로 비교해 이 기기에서 더 빠른 쪽을 남김
+      if(!m.face&&!m.photo&&!self.locked&&ok){
+        const B=self.bench[self.dg];B.push(ms);
+        const slowGpu=self.dg==='GPU'&&B.length>=5&&B.slice(2).reduce((x,y)=>x+y,0)/(B.length-2)>80;
+        if(B.length===8||slowGpu){
+          if(slowGpu)while(B.length<8)B.push(1e4);
+          if(self.dg==='GPU'){try{const c=await self.mk('CPU');self.gpuDet=det;det=c;self.dg='CPU'}catch(err){self.locked=true}}
+          else{
+            const avg=a=>a.slice(2).reduce((x,y)=>x+y,0)/(a.length-2),g=avg(self.bench.GPU),c=avg(self.bench.CPU);
+            if(g<c){try{det.close()}catch(err){}det=self.gpuDet;self.dg='GPU'}else{try{self.gpuDet.close()}catch(err){}}
+            self.gpuDet=null;self.locked=true;
+          }
+        }
+      }
     }
   };
 }
-let worker=null,wReady=false,wBusy=false,reqId=0,wFails=0;
+let worker=null,wReady=false,wBusy=false,reqId=0,wFails=0;const capTimes=new Map();const PERF={det:0,ms:0,delegate:'',frames:0,cam:0};
 function startWorker(base,bundle,model,face){
   return new Promise((res,rej)=>{
     try{
@@ -1008,15 +1086,17 @@ function onResult(m){
   if(!m.ok&&++wFails>5){wReady=false;fallbackMain();return}
   if(m.photo){if(S.src==='photo')S.dets=m.dets;return}
   if(S.src!=='cam')return;
+  const capT=capTimes.get(m.id);capTimes.delete(m.id);
   if(m.face!==(selfie()&&!!S.faceReady))return; // 전면·후면 전환 직후의 지난 결과는 버림
-  S.dets=m.dets;
+  PERF.det++;PERF.ms=PERF.ms?PERF.ms*.9+m.ms*.1:m.ms;PERF.delegate=m.delegate;
+  S.dets=m.dets;if(capT)calibrate(m.dets,capT);
 }
 async function requestDetect(now){
   if(wReady){
-    if(wBusy||now-S.lastDet<50||!vid.videoWidth)return;
-    wBusy=true;S.lastDet=now;
+    if(wBusy||now-S.lastDet<33||!vid.videoWidth)return;
+    wBusy=true;S.lastDet=now;capTimes.set(reqId+1,performance.now());
     try{
-      const vw=vid.videoWidth,vh=vid.videoHeight,sc=384/Math.max(vw,vh);
+      const vw=vid.videoWidth,vh=vid.videoHeight,sc=320/Math.max(vw,vh);
       const bmp=await createImageBitmap(vid,{resizeWidth:Math.round(vw*sc),resizeHeight:Math.round(vh*sc),resizeQuality:'low'});
       worker.postMessage({type:'detect',bmp,face:selfie()&&!!S.faceReady,id:++reqId},[bmp]);
     }catch(e){wBusy=false}
